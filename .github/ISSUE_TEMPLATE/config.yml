@@ -1,8 +1,0 @@
-blank_issues_enabled: true
-contact_links:
-  - name: Wiki
-    url: https://github.com/EmilDeuOfficial/SpotifyControl/wiki
-    about: Installation, configuration, commands, listening parties and the FAQ.
-  - name: Streaming only Spotify
-    url: https://github.com/EmilDeuOfficial/SpotifyControl/wiki/Streaming-Only-Spotify
-    about: Read this first if voices or game sound end up in a broadcast.
