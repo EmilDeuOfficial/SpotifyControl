@@ -1,0 +1,11 @@
+{
+  "category.spotifycontrol": "SpotifyControl",
+  "key.category.spotifycontrol.main": "SpotifyControl",
+  "key.spotifycontrol.open": "Open Spotify overlay",
+  "key.spotifycontrol.playpause": "Play / Pause",
+  "key.spotifycontrol.next": "Next track",
+  "key.spotifycontrol.previous": "Previous track",
+  "key.spotifycontrol.volume_up": "Volume up",
+  "key.spotifycontrol.volume_down": "Volume down",
+  "key.spotifycontrol.toggle_hud": "Toggle now-playing HUD"
+}

@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "id": "spotifycontrol",
+  "version": "${version}",
+  "name": "SpotifyControl",
+  "description": "Spotify overlay for Minecraft with playlist management, search and a Simple Voice Chat listening party.",
+  "authors": ["EmilDeuOfficial"],
+  "contact": {
+    "homepage": "https://github.com/EmilDeuOfficial/SpotifyControl",
+    "sources": "https://github.com/EmilDeuOfficial/SpotifyControl",
+    "issues": "https://github.com/EmilDeuOfficial/SpotifyControl/issues"
+  },
+  "license": "MIT",
+  "icon": "assets/spotifycontrol/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": ["de.emilo.spotifycontrol.SpotifyControl"],
+    "client": ["de.emilo.spotifycontrol.SpotifyControlClient"],
+    "modmenu": ["de.emilo.spotifycontrol.integration.ModMenuIntegration"],
+    "voicechat": [
+      "de.emilo.spotifycontrol.voice.SpotifyVoicechatPlugin",
+      "de.emilo.spotifycontrol.voice.SpotifyVoicechatClientPlugin"
+    ]
+  },
+  "mixins": [
+    {
+      "config": "spotifycontrol.mixins.json",
+      "environment": "client"
+    }
+  ],
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "fabric-api": "*",
+    "minecraft": "${minecraft_dependency}",
+    "java": ">=21"
+  },
+  "suggests": {
+    "voicechat": ">=2.5.0",
+    "modmenu": "*"
+  }
+}

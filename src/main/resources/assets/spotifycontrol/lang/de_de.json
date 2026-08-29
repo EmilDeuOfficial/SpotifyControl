@@ -1,0 +1,11 @@
+{
+  "category.spotifycontrol": "SpotifyControl",
+  "key.category.spotifycontrol.main": "SpotifyControl",
+  "key.spotifycontrol.open": "Spotify-Overlay oeffnen",
+  "key.spotifycontrol.playpause": "Wiedergabe / Pause",
+  "key.spotifycontrol.next": "Naechster Titel",
+  "key.spotifycontrol.previous": "Vorheriger Titel",
+  "key.spotifycontrol.volume_up": "Lautstaerke lauter",
+  "key.spotifycontrol.volume_down": "Lautstaerke leiser",
+  "key.spotifycontrol.toggle_hud": "Now-Playing-HUD umschalten"
+}

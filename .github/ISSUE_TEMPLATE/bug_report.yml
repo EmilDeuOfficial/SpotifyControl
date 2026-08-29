@@ -1,0 +1,78 @@
+name: Bug report
+description: Something does not work as described.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        One jar covers Minecraft 1.21 to 1.21.11, so the exact versions matter for almost every
+        report. For listening parties, the same jar has to be installed on the client and on the
+        server: a mismatch shows up as a disconnect while joining.
+
+  - type: textarea
+    id: what-happens
+    attributes:
+      label: What happens
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+
+  - type: input
+    id: minecraft
+    attributes:
+      label: Minecraft version
+      placeholder: "1.21.8"
+    validations:
+      required: true
+
+  - type: input
+    id: mod-version
+    attributes:
+      label: SpotifyControl version
+      placeholder: "1.0"
+    validations:
+      required: true
+
+  - type: input
+    id: loader
+    attributes:
+      label: Fabric Loader and Fabric API version
+      placeholder: "Loader 0.16.14, API 0.136.1+1.21.8"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: side
+    attributes:
+      label: Where does it happen
+      options:
+        - Single player
+        - Multiplayer, mod on client and server
+        - Multiplayer, mod only on the client
+        - Dedicated server
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: "Windows 11"
+    validations:
+      required: true
+
+  - type: input
+    id: voicechat
+    attributes:
+      label: Simple Voice Chat version
+      description: Only needed for listening parties in broadcast mode.
+      placeholder: "2.5.31, or none"
+
+  - type: textarea
+    id: log
+    attributes:
+      label: Log
+      description: >
+        latest.log from the run, or the relevant part of it. Never paste the contents of
+        config/spotifycontrol/tokens.json, it holds your Spotify access token.
+      render: text
