@@ -1,7 +1,5 @@
 # SpotifyControl
 
-<img src="img/logo.png" alt="SpotifyControl" width="128">
-
 A Fabric mod that puts a Spotify client into Minecraft. Press Ctrl + M to open a full overlay in the
 Spotify colour theme, log in with your own Spotify account, browse your library, search, manage
 playlists and control playback without leaving the game. A listening party feature lets other players
