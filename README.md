@@ -1,4 +1,6 @@
-# SpotifyControl
+<p align="center">
+  <img src="img/title.png" alt="SpotifyControl">
+</p>
 
 A Fabric mod that puts a Spotify client into Minecraft. Press Ctrl + M to open a full overlay in the
 Spotify colour theme, log in with your own Spotify account, browse your library, search, manage
@@ -10,6 +12,12 @@ The mod talks to the official Spotify Web API. It does not decode, download or r
 in sync mode, and broadcast mode captures whatever your operating system is already playing: on
 Windows straight from the speakers with nothing to install, on other systems from a loopback device
 you select yourself.
+
+<p align="center">
+  <img src="img/ingame.png" alt="The now playing HUD and the player bar in game">
+</p>
+
+<p align="center"><sub>Now playing HUD in any corner, and the full player bar without leaving the world</sub></p>
 
 ## Features
 
@@ -34,6 +42,12 @@ you select yourself.
 - Overlay renders at its own GUI scale (2 by default) so it stays compact when the game runs at scale 3 or 4
 - Mod Menu integration: the Configure button opens the overlay settings, also from the title screen
 - Seven languages: English, German, Russian, Spanish, French, Japanese, Chinese
+
+<p align="center">
+  <img src="img/features.png" alt="Library, search, listening party and settings">
+</p>
+
+<p align="center"><sub>Library, search, listening parties and the settings, all inside the game</sub></p>
 
 ## Setup
 
@@ -206,6 +220,12 @@ Client side, `config/spotifycontrol/client.json`:
 
 Tokens live in `config/spotifycontrol/tokens.json`. Delete the file or use Log out in the overlay
 settings to disconnect the account.
+
+<p align="center">
+  <img src="img/colours.png" alt="The same view in six accent colours">
+</p>
+
+<p align="center"><sub>Six accent palettes, switched in the settings without a restart</sub></p>
 
 ## Key bindings
 
