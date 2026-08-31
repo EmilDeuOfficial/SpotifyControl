@@ -91,7 +91,7 @@ public class Sidebar {
         int centerX = x + 18;
         int centerY = y + 18;
         int size = ClientState.session().connecting() ? Anim.grownSize(9, Anim.pulse(2.4f), 1) : 9;
-        Icons.spotify(graphics, centerX, centerY, size);
+        Icons.logo(graphics, centerX, centerY, size);
         Platform.drawString(graphics, font, "SpotifyControl", x + 32, y + 14, Theme.TEXT, false);
     }
 

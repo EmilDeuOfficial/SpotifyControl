@@ -403,6 +403,44 @@ def load(path):
     return parts
 
 
+
+
+SHAPES = ("path", "rect", "circle", "ellipse", "line", "polygon", "polyline")
+
+
+def load_by_fill(path):
+    """Every drawn shape of an SVG, grouped by fill colour, in document order.
+
+    load() throws the colours away, which is right for the icon set: those are painted in one
+    tint chosen at draw time. A logo made of more than one colour needs them kept, so this walks
+    the same tree and records the fill next to the geometry. Returns [(fill, parts), ...].
+    """
+    root = ET.parse(path).getroot()
+    groups = []
+    index = {}
+
+    def walk(el, ctm, style):
+        tag = el.tag.replace(NS, "")
+        if tag in SHAPES:
+            parts = []
+            # collect() applies this element's own transform and style, so it gets the parent ones.
+            collect(el, ctm, style, parts)
+            if parts:
+                fill = style_of(el, style).get("fill", "black")
+                key = fill.strip().lower()
+                if key not in index:
+                    index[key] = len(groups)
+                    groups.append((fill, []))
+                groups[index[key]][1].extend(parts)
+            return
+        ctm = mat_mul(ctm, parse_transform(el.get("transform")))
+        style = style_of(el, style)
+        for child in el:
+            walk(child, ctm, style)
+
+    walk(root, IDENTITY, {})
+    return groups
+
 # -------------------------------------------------------------- normalization
 
 def flatten_cubic(p0, p1, p2, p3, out, steps=24):

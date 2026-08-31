@@ -624,7 +624,7 @@ public class SpotifyOverlay {
         // While the login is out there somewhere, the logo breathes, a whole pixel of radius at a
         // time. Two of them, because this argument is a radius and so covers twice that in width.
         float breath = connecting ? Anim.pulse(2.2f) : 0.0f;
-        Icons.spotify(graphics, logoX, logoY, Anim.grownSize(22, breath, 2));
+        Icons.logo(graphics, logoX, logoY, Anim.grownSize(22, breath, 2));
 
         long blocked = ClientState.session().rateLimitedForMillis();
         String title = blocked > 0L

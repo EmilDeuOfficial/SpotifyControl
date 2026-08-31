@@ -196,18 +196,29 @@ public final class Icons {
         }
     }
 
-    public static void spotify(GuiGraphics graphics, int cx, int cy, int radius) {
+    /**
+      * The mod logo, a music note in the two greens the artwork uses. The bars go down first so
+      * the heads sit on top of them the way they do in the SVG, and both colours come from the
+      * generated constants, so recolouring the source file is enough to recolour this.
+      */
+    public static void logo(GuiGraphics graphics, int cx, int cy, int radius) {
         if (Theme.smooth()) {
             int extent = Math.max(4, radius * 2);
             int x = cx - extent / 2;
             int y = cy - extent / 2;
-            RasterCache.drawIcon(graphics, "spotify_disc", VectorIcons.SPOTIFY_DISC, x, y, extent, Theme.GREEN);
-            RasterCache.drawIcon(graphics, "spotify_waves", VectorIcons.SPOTIFY_WAVES, x, y, extent, Theme.BLACK);
+            RasterCache.drawIcon(graphics, "logo_bars", VectorIcons.LOGO_BARS, x, y, extent,
+                    VectorIcons.LOGO_BARS_COLOR);
+            RasterCache.drawIcon(graphics, "logo_heads", VectorIcons.LOGO_HEADS, x, y, extent,
+                    VectorIcons.LOGO_HEADS_COLOR);
         } else {
-            Theme.circle(graphics, cx, cy, radius, Theme.GREEN);
-            graphics.fill(cx - 5, cy - 3, cx + 6, cy - 2, Theme.BLACK);
-            graphics.fill(cx - 4, cy, cx + 5, cy + 1, Theme.BLACK);
-            graphics.fill(cx - 3, cy + 3, cx + 4, cy + 4, Theme.BLACK);
+            // The same note in whole pixels, for the setting that turns the rasterizer off.
+            int bars = VectorIcons.LOGO_BARS_COLOR;
+            int heads = VectorIcons.LOGO_HEADS_COLOR;
+            graphics.fill(cx - 4, cy - 6, cx + 6, cy - 4, bars);
+            graphics.fill(cx - 4, cy - 6, cx - 2, cy + 3, bars);
+            graphics.fill(cx + 4, cy - 6, cx + 6, cy + 3, bars);
+            Theme.circle(graphics, cx - 3, cy + 4, 3, heads);
+            Theme.circle(graphics, cx + 5, cy + 4, 3, heads);
         }
     }
 }

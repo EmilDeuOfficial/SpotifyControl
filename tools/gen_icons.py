@@ -56,6 +56,16 @@ def parts_of_string(text):
     return parts
 
 
+def hex_argb(fill):
+    """#rgb or #rrggbb from the SVG as an opaque Java colour literal."""
+    text = fill.strip().lstrip("#")
+    if len(text) == 3:
+        text = "".join(c * 2 for c in text)
+    if len(text) != 6:
+        raise SystemExit("cannot read colour " + fill)
+    return "FF" + text.upper()
+
+
 def main():
     icons = {}
     for name, filename, inset in SOURCES:
@@ -67,21 +77,18 @@ def main():
     for name, (text, inset) in EXTRA.items():
         icons[name] = S.encode(S.normalize(parts_of_string(text), inset=inset))
 
-    # the logo is one evenodd path: disc with the three waves cut out.
-    # the waves alone are needed too, normalized against the disc so they line
-    # up when painted on top of a green circle.
-    logo = S.load(IMG / "logo.svg")
-    if len(logo) != 1 or logo[0][0] != "f":
-        raise SystemExit("unexpected logo structure")
-    kind, rule, contours = logo[0]
-    box = S.bounds(logo)
-    icons["SPOTIFY"] = S.encode(S.normalize(logo, box=box))
-    waves = [("f", 0, contours[:-1])]
-    disc = [("f", 0, contours[-1:])]
-    if len(contours) != 4:
-        raise SystemExit("expected 4 logo contours, got %d" % len(contours))
-    icons["SPOTIFY_WAVES"] = S.encode(S.normalize(waves, box=box))
-    icons["SPOTIFY_DISC"] = S.encode(S.normalize(disc, box=box))
+    # The logo is the one drawing here that carries more than a single colour, so its groups are
+    # kept apart. All of them are normalized against the shared bounding box rather than each
+    # against its own, which is what makes them line up when drawn on top of one another.
+    groups = S.load_by_fill(IMG / "logo.svg")
+    if len(groups) != 2:
+        raise SystemExit("expected 2 colours in logo.svg, got %d" % len(groups))
+    everything = [part for _, parts in groups for part in parts]
+    box = S.bounds(everything)
+    icons["LOGO"] = S.encode(S.normalize(everything, box=box))
+    icons["LOGO_BARS"] = S.encode(S.normalize(groups[0][1], box=box))
+    icons["LOGO_HEADS"] = S.encode(S.normalize(groups[1][1], box=box))
+    colors = [("LOGO_BARS_COLOR", groups[0][0]), ("LOGO_HEADS_COLOR", groups[1][0])]
 
     body = io.StringIO()
     body.write("package de.emilo.spotifycontrol.gui.raster;\n\n")
@@ -94,6 +101,10 @@ def main():
     body.write("    private VectorIcons() {\n    }\n")
     for name in sorted(icons):
         body.write("\n    public static final String %s =\n            \"%s\";\n" % (name, icons[name]))
+    # The logo colours travel with the shapes, so recolouring the SVG reaches the game
+    # without anybody having to remember a hex value sitting in a Java file.
+    for name, value in colors:
+        body.write("\n    public static final int %s = 0x%s;\n" % (name, hex_argb(value)))
     body.write("}\n")
     OUT.write_text(body.getvalue(), encoding="utf-8")
 
