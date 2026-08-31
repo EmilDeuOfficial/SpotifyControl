@@ -283,7 +283,7 @@ the mod carries one implementation per generation and picks the right one when i
 | 1.21.11 | `platform.impl.f` | `ResourceLocation` renamed to `Identifier`, `Util` moved, permission sets |
 
 Each implementation is two classes. Everything else, roughly 60 classes, is shared and compiles to
-byte-identical code on every generation. The release is a single file, `SpotifyControl_1.0_1.21.x.jar`.
+byte-identical code on every generation. The release is a single file, `SpotifyControl_1.0_1.21.x_BETA.jar`.
 
 ## Requirements
 
@@ -303,7 +303,7 @@ Forge, NeoForge and Quilt are not supported.
 
 1. Install Fabric Loader 0.16 or newer.
 2. Drop Fabric API into `mods/`.
-3. Drop `SpotifyControl_1.0_1.21.x.jar` into `mods/`. It runs on every Minecraft version from 1.21
+3. Drop `SpotifyControl_1.0_1.21.x_BETA.jar` into `mods/`. It runs on every Minecraft version from 1.21
    to 1.21.11.
 4. For listening parties, install the mod on the server as well. For BROADCAST mode, install Simple
    Voice Chat on both sides.
