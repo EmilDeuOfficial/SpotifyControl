@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="img/title.png" alt="SpotifyControl">
+  <img src="img/title_transparent.png" alt="SpotifyControl">
 </p>
 
 A Fabric mod that puts a Spotify client into Minecraft. Press Ctrl + M to open a full overlay in the

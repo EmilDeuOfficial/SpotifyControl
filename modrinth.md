@@ -2,7 +2,7 @@
 <!-- Spotify overlay for Minecraft: search, browse and manage your library, control playback, and host listening parties where the whole server hears the same music through Simple Voice Chat. -->
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/EmilDeuOfficial/SpotifyControl/main/img/title.png" alt="SpotifyControl">
+  <img src="https://raw.githubusercontent.com/EmilDeuOfficial/SpotifyControl/main/img/title_transparent.png" alt="SpotifyControl">
 </p>
 
 A Fabric mod that puts a Spotify client into Minecraft. Press Ctrl + M to open a full overlay in the
