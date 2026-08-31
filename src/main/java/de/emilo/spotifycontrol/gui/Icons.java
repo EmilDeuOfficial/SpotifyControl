@@ -197,23 +197,32 @@ public final class Icons {
     }
 
     /**
-      * The mod logo, a music note in the two greens the artwork uses. The bars go down first so
-      * the heads sit on top of them the way they do in the SVG, and both colours come from the
-      * generated constants, so recolouring the source file is enough to recolour this.
+      * How much lighter the note heads are than the bars, matching the step between the two greens
+      * in the artwork. Mixing towards white keeps the hue, so the pair stays recognisable as one
+      * logo whichever accent is set.
+      */
+    private static final float HEAD_TINT = 0.35f;
+
+    /**
+      * The mod logo, a music note in the accent chosen in the settings rather than in the greens
+      * the SVG happens to be drawn in. The bars go down first so the heads sit on top of them the
+      * way they do in the artwork.
+      *
+      * <p>{@link VectorIcons#LOGO_BARS_COLOR} and its sibling still carry what the file says, which
+      * is what the icon on disk is painted in, but nothing on screen reads them: an accent that
+      * left the logo behind was the one green thing in a purple interface.
       */
     public static void logo(GuiGraphics graphics, int cx, int cy, int radius) {
+        int bars = Theme.accent();
+        int heads = Theme.mix(bars, 0xFFFFFFFF, HEAD_TINT);
         if (Theme.smooth()) {
             int extent = Math.max(4, radius * 2);
             int x = cx - extent / 2;
             int y = cy - extent / 2;
-            RasterCache.drawIcon(graphics, "logo_bars", VectorIcons.LOGO_BARS, x, y, extent,
-                    VectorIcons.LOGO_BARS_COLOR);
-            RasterCache.drawIcon(graphics, "logo_heads", VectorIcons.LOGO_HEADS, x, y, extent,
-                    VectorIcons.LOGO_HEADS_COLOR);
+            RasterCache.drawIcon(graphics, "logo_bars", VectorIcons.LOGO_BARS, x, y, extent, bars);
+            RasterCache.drawIcon(graphics, "logo_heads", VectorIcons.LOGO_HEADS, x, y, extent, heads);
         } else {
             // The same note in whole pixels, for the setting that turns the rasterizer off.
-            int bars = VectorIcons.LOGO_BARS_COLOR;
-            int heads = VectorIcons.LOGO_HEADS_COLOR;
             graphics.fill(cx - 4, cy - 6, cx + 6, cy - 4, bars);
             graphics.fill(cx - 4, cy - 6, cx - 2, cy + 3, bars);
             graphics.fill(cx + 4, cy - 6, cx + 6, cy + 3, bars);
