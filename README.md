@@ -23,6 +23,12 @@ at all once Lyrics in the world is switched off in the settings.
 
 <p align="center"><sub>Now playing HUD in any corner, and the full player bar without leaving the world</sub></p>
 
+<p align="center">
+  <img src="img/lyrics.png" alt="Synced lyrics floating word by word as 3D text in the world">
+</p>
+
+<p align="center"><sub>Live lyrics: every word of the song appears in the world the moment it is sung</sub></p>
+
 ## Features
 
 - Full-screen overlay in the Spotify colour theme (#121212 base, #1DB954 accent) with sidebar, search,
