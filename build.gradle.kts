@@ -106,6 +106,8 @@ val universalModJson = tasks.register("universalModJson") {
     val output = layout.buildDirectory.file("universal/fabric.mod.json")
     val modVersion = project.property("mod_version") as String
     inputs.file(template)
+    // Without the version as an input Gradle kept the file from the last build after a version bump.
+    inputs.property("modVersion", modVersion)
     outputs.file(output)
     doLast {
         val rendered = template.readText()

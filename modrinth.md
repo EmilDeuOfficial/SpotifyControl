@@ -322,7 +322,7 @@ the mod carries one implementation per generation and picks the right one when i
 | 1.21.11 | `platform.impl.f` | `ResourceLocation` renamed to `Identifier`, `Util` moved, permission sets |
 
 Each implementation is two classes. Everything else, roughly 60 classes, is shared and compiles to
-byte-identical code on every generation. The release is a single file, `SpotifyControl_1.0_1.21.x_BETA.jar`.
+byte-identical code on every generation. The release is a single file, `SpotifyControl_1.1_1.21.x_BETA.jar`.
 
 ### Requirements
 
@@ -336,7 +336,7 @@ byte-identical code on every generation. The release is a single file, `SpotifyC
 | Mod Menu | Optional, adds a Configure button |
 | Spotify | Premium for playback control, any account for browsing |
 
-Drop `SpotifyControl_1.0_1.21.x_BETA.jar` into `mods/` together with Fabric API. It covers every
+Drop `SpotifyControl_1.1_1.21.x_BETA.jar` into `mods/` together with Fabric API. It covers every
 Minecraft version from 1.21 to 1.21.11. For listening parties the mod has to be on the server as
 well, and BROADCAST mode needs Simple Voice Chat on both sides. Forge, NeoForge and Quilt are not
 supported.
