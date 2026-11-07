@@ -7,6 +7,7 @@ import de.emilo.spotifycontrol.gui.Anim;
 import de.emilo.spotifycontrol.gui.Icons;
 import de.emilo.spotifycontrol.platform.Platform;
 import de.emilo.spotifycontrol.gui.Theme;
+import de.emilo.spotifycontrol.lyrics.LyricsIndex;
 import de.emilo.spotifycontrol.spotify.model.Track;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -128,6 +129,7 @@ public class TrackListView {
         tracks.clear();
         if (replacement != null) {
             tracks.addAll(replacement);
+            LyricsIndex.prefetch(replacement);
         }
         // An empty replacement opens a paged listing, it is not a list arriving. Stamping it here
         // would let the entrance run out while the first request is still in flight, and the rows
@@ -155,6 +157,7 @@ public class TrackListView {
                 entryStartMillis = System.currentTimeMillis();
             }
             tracks.addAll(page);
+            LyricsIndex.prefetch(page);
         }
         scroll.setContentHeight(contentHeight());
     }
@@ -459,8 +462,14 @@ public class TrackListView {
         int likeX = likeX(font, track, x, width);
         int textWidth = textWidth(font, track, x, width);
 
-        Platform.drawString(graphics, font, Theme.fit(font, track.title(), textWidth), textX, top + 6, textColor,
-                false);
+        // A small lyrics sign after the title marks the songs that bring their lyrics into the world.
+        boolean hasLyrics = LyricsIndex.status(track) == LyricsIndex.Status.AVAILABLE;
+        String title = Theme.fit(font, track.title(), hasLyrics ? textWidth - 12 : textWidth);
+        Platform.drawString(graphics, font, title, textX, top + 6, textColor, false);
+        if (hasLyrics) {
+            Icons.lyrics(graphics, textX + font.width(title) + 7, top + 10, 8,
+                    arriving(unavailable ? Theme.TEXT_DIM : Theme.TEXT_MUTED, entry));
+        }
         // A dimmed row answers to nothing, and an artist name is part of that row. Lighting one up
         // under the cursor would promise a page that the same rule then refuses to open.
         ArtistLine.render(graphics, font, track, "row.artist:" + index + ":", textX, top + 17, textWidth,

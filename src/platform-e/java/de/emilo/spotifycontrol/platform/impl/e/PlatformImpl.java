@@ -211,4 +211,10 @@ public final class PlatformImpl implements PlatformApi {
         return Component.literal("\uE000")
                 .withStyle(Style.EMPTY.withFont(new FontDescription.Resource(id("marker"))));
     }
+
+    @Override
+    public com.mojang.math.Transformation transformation(org.joml.Vector3f translation, org.joml.Quaternionf rotation,
+                                                         org.joml.Vector3f scale) {
+        return new com.mojang.math.Transformation(translation, rotation, scale, new org.joml.Quaternionf());
+    }
 }

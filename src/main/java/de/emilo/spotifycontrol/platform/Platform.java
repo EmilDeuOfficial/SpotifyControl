@@ -215,4 +215,9 @@ public final class Platform {
     public static MutableComponent streamGlyph() {
         return api().streamGlyph();
     }
+
+    public static com.mojang.math.Transformation transformation(org.joml.Vector3f translation,
+                                                                org.joml.Quaternionf rotation, org.joml.Vector3f scale) {
+        return api().transformation(translation, rotation, scale);
+    }
 }

@@ -164,6 +164,14 @@ public final class Icons {
         }
     }
 
+    public static void lyrics(GuiGraphics graphics, int cx, int cy, int size, int color) {
+        if (Theme.smooth()) {
+            draw(graphics, "lyrics", VectorIcons.LYRICS, cx, cy, size, color);
+        } else {
+            PixelIcons.lyrics(graphics, cx, cy, size, color);
+        }
+    }
+
     public static void people(GuiGraphics graphics, int cx, int cy, int size, int color) {
         if (Theme.smooth()) {
             draw(graphics, "people", VectorIcons.PEOPLE, cx, cy, size, color);

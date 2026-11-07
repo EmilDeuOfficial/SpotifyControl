@@ -63,6 +63,7 @@ public class PlayerBar {
 
     private int deviceX = HIDDEN;
     private int queueX = HIDDEN;
+    private int lyricsX = HIDDEN;
     private int heartX = HIDDEN;
     private int speakerX = HIDDEN;
 
@@ -293,8 +294,20 @@ public class PlayerBar {
             iconButton("bar.queue", within(mouseX, mouseY, queueX, volumeY, 12),
                     Theme.TEXT_MUTED, Theme.TEXT, 12,
                     (color, size) -> Icons.queue(graphics, queueX, volumeY, size, color));
+            cursor = queueX;
         } else {
             queueX = HIDDEN;
+        }
+        if (config.showLyricsButton) {
+            lyricsX = cursor - 22;
+            // Lit like shuffle while the world lyrics are on.
+            float lyricsOn = Anim.to("bar.lyricsOn", config.worldLyrics ? 1.0f : 0.0f, Anim.FAST);
+            int lyricsIdle = Anim.mix(Theme.TEXT_MUTED, Theme.GREEN, lyricsOn);
+            iconButton("bar.lyrics", within(mouseX, mouseY, lyricsX, volumeY, 12), lyricsIdle,
+                    whenMoving(lyricsIdle, Anim.mix(Theme.TEXT, Theme.GREEN_BRIGHT, lyricsOn)), 12,
+                    (color, size) -> Icons.lyrics(graphics, lyricsX, volumeY, size, color));
+        } else {
+            lyricsX = HIDDEN;
         }
 
     }
@@ -429,6 +442,12 @@ public class PlayerBar {
         if (within(mx, my, queueX, volumeY, 12)) {
             Anim.click("bar.queue");
             openQueue.run();
+            return true;
+        }
+        if (within(mx, my, lyricsX, volumeY, 12)) {
+            Anim.click("bar.lyrics");
+            ConfigManager.client().worldLyrics = !ConfigManager.client().worldLyrics;
+            ConfigManager.saveClient();
             return true;
         }
         return true;

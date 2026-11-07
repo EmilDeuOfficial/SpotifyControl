@@ -5,6 +5,7 @@ import de.emilo.spotifycontrol.client.KeyBindings;
 import de.emilo.spotifycontrol.config.ConfigManager;
 import de.emilo.spotifycontrol.spotify.SpotifyLauncher;
 import de.emilo.spotifycontrol.gui.NowPlayingHud;
+import de.emilo.spotifycontrol.lyrics.WorldLyrics;
 import de.emilo.spotifycontrol.net.ClientNetworking;
 import de.emilo.spotifycontrol.net.payload.PartyStatePayload;
 import de.emilo.spotifycontrol.net.payload.ServerSettingsPayload;
@@ -52,6 +53,7 @@ public class SpotifyControlClient implements ClientModInitializer {
         KeyBindings.tick(client);
         ClientState.session().tick();
         ClientState.reportNowPlayingIfHost();
+        WorldLyrics.tick(client);
         if (ConfigManager.client().muteMinecraftMusicWhileListening
                 && ClientState.session().playback().playing()) {
             Platform.stopMusic(client);

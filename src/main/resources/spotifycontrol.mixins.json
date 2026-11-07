@@ -5,7 +5,9 @@
   "compatibilityLevel": "JAVA_21",
   "refmap": "spotifycontrol.refmap.json",
   "client": [
-    "PlayerNameTagMixin"
+    "DisplayAccess",
+    "PlayerNameTagMixin",
+    "TextDisplayAccess"
   ],
   "injectors": {
     "defaultRequire": 1

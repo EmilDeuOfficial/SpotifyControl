@@ -51,6 +51,7 @@ public class SettingsPanel {
     private static final String[] CORNERS = {"TOP_LEFT", "TOP_RIGHT", "BOTTOM_LEFT", "BOTTOM_RIGHT"};
     private static final String[] MODIFIERS = {"CONTROL", "SHIFT", "ALT", "NONE"};
     private static final String[] START_VIEWS = {"HOME", "SEARCH", "LIBRARY", "LIKED"};
+    private static final String[] KEEP_MODES = {"LINE", "COUNT", "SECONDS"};
 
     private interface Row {
         String label();
@@ -224,6 +225,11 @@ public class SettingsPanel {
                     ConfigManager.client().showQueueButton = value;
                     ConfigManager.saveClient();
                 }));
+        rows.add(new ToggleRow("Lyrics button", () -> ConfigManager.client().showLyricsButton,
+                value -> {
+                    ConfigManager.client().showLyricsButton = value;
+                    ConfigManager.saveClient();
+                }));
         rows.add(new ToggleRow("Device button", () -> ConfigManager.client().showDeviceButton,
                 value -> {
                     ConfigManager.client().showDeviceButton = value;
@@ -296,6 +302,62 @@ public class SettingsPanel {
                     ConfigManager.client().captureVolumePercent = value;
                     ConfigManager.saveClient();
                 }, 0, 200, 5, "%"));
+
+        rows.add(new HeaderRow("Lyrics"));
+        rows.add(new ToggleRow("Lyrics in the world", () -> ConfigManager.client().worldLyrics,
+                value -> {
+                    ConfigManager.client().worldLyrics = value;
+                    ConfigManager.saveClient();
+                }));
+        rows.add(new SliderRow("Words per block", () -> ConfigManager.client().lyricsWordsPerPiece,
+                value -> {
+                    ConfigManager.client().lyricsWordsPerPiece = value;
+                    ConfigManager.saveClient();
+                }, 1, 6, 1, ""));
+        rows.add(new SliderRow("Nearest distance", () -> ConfigManager.client().lyricsMinDistance,
+                value -> {
+                    ConfigManager.client().lyricsMinDistance = value;
+                    ConfigManager.client().lyricsMaxDistance =
+                            Math.max(value, ConfigManager.client().lyricsMaxDistance);
+                    ConfigManager.saveClient();
+                }, 2, 30, 1, " blocks"));
+        rows.add(new SliderRow("Farthest distance", () -> ConfigManager.client().lyricsMaxDistance,
+                value -> {
+                    ConfigManager.client().lyricsMaxDistance = value;
+                    ConfigManager.client().lyricsMinDistance =
+                            Math.min(value, ConfigManager.client().lyricsMinDistance);
+                    ConfigManager.saveClient();
+                }, 2, 30, 1, " blocks"));
+        rows.add(new SliderRow("Sprint distance bonus", () -> ConfigManager.client().lyricsSprintExtraDistance,
+                value -> {
+                    ConfigManager.client().lyricsSprintExtraDistance = value;
+                    ConfigManager.saveClient();
+                }, 0, 30, 1, " blocks"));
+        rows.add(new ToggleRow("Tilted words", () -> ConfigManager.client().lyricsTilt,
+                value -> {
+                    ConfigManager.client().lyricsTilt = value;
+                    ConfigManager.saveClient();
+                }));
+        rows.add(new SliderRow("Text size", () -> ConfigManager.client().lyricsTextSize,
+                value -> {
+                    ConfigManager.client().lyricsTextSize = value;
+                    ConfigManager.saveClient();
+                }, 25, 300, 5, "%"));
+        rows.add(new CycleRow("Lyrics fade out", () -> keepModeLabel(ConfigManager.client().lyricsKeepMode),
+                () -> {
+                    ConfigManager.client().lyricsKeepMode = cycle(KEEP_MODES, ConfigManager.client().lyricsKeepMode);
+                    ConfigManager.saveClient();
+                }));
+        rows.add(new SliderRow("Lyrics seconds", () -> ConfigManager.client().lyricsSeconds,
+                value -> {
+                    ConfigManager.client().lyricsSeconds = value;
+                    ConfigManager.saveClient();
+                }, 1, 30, 1, " s"));
+        rows.add(new SliderRow("Lyrics kept", () -> ConfigManager.client().lyricsKept,
+                value -> {
+                    ConfigManager.client().lyricsKept = value;
+                    ConfigManager.saveClient();
+                }, 8, 128, 8, ""));
 
         rows.add(new HeaderRow("Spotify app"));
         rows.add(new ToggleRow("Start Spotify automatically", () -> ConfigManager.client().autoLaunchSpotify,
@@ -793,6 +855,14 @@ public class SettingsPanel {
 
     private static String overlayScaleLabel(int value) {
         return value <= 0 ? "Same as game" : value + "x";
+    }
+
+    private static String keepModeLabel(String mode) {
+        return switch (mode) {
+            case "COUNT" -> "Over the kept count";
+            case "SECONDS" -> "After the seconds";
+            default -> "When the line ends";
+        };
     }
 
     private static String cycle(String[] values, String current) {

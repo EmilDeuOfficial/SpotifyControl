@@ -30,6 +30,7 @@ SOURCES = [
     ("QUEUE", "queue.svg", 0.0),
     ("PEOPLE", "friend.svg", 0.0),
     ("GEAR", "settings.svg", 0.0),
+    ("LYRICS", "lyrics.svg", 0.0),
 ]
 
 # icons the set does not cover, authored in the same 24x24 space

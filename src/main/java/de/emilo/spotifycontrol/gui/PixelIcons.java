@@ -144,6 +144,24 @@ public final class PixelIcons {
         triangleRight(graphics, cx + 4, cy + half - 1, 4, color);
     }
 
+    /** A lyrics sheet: a page with two text lines and a note in its lower corner. */
+    public static void lyrics(GuiGraphics graphics, int cx, int cy, int size, int color) {
+        int half = size / 2;
+        int left = cx - half;
+        int top = cy - half;
+        int right = cx + half - 3;
+        int bottom = cy + half - 2;
+        graphics.fill(left, top, right, top + 1, color);
+        graphics.fill(left, top, left + 1, bottom, color);
+        graphics.fill(left, bottom - 1, cx - 1, bottom, color);
+        graphics.fill(right - 1, top, right, cy - 2, color);
+        graphics.fill(left + 3, cy - 2, cx + 1, cy - 1, color);
+        graphics.fill(left + 3, cy + 1, cx - 1, cy + 2, color);
+        graphics.fill(cx + 3, cy, cx + 4, cy + half, color);
+        graphics.fill(cx + 4, cy, cx + 6, cy + 1, color);
+        graphics.fill(cx + 1, cy + half - 2, cx + 4, cy + half + 1, color);
+    }
+
     public static void people(GuiGraphics graphics, int cx, int cy, int size, int color) {
         int radius = Math.max(2, size / 5);
         Theme.circle(graphics, cx - radius - 1, cy - radius, radius, color);

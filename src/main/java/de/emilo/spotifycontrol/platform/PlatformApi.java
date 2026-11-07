@@ -72,6 +72,14 @@ public interface PlatformApi {
 
     List<String> onlinePlayerNames(Minecraft client);
 
+    /**
+     * A display entity transformation. The constructor takes JOML's mutable types up to 1.21.10
+     * and their read only interfaces from 1.21.11 on, which is a different method to the JVM, so
+     * every generation builds it with its own compiled call.
+     */
+    com.mojang.math.Transformation transformation(org.joml.Vector3f translation, org.joml.Quaternionf rotation,
+                                                  org.joml.Vector3f scale);
+
     /** The mod's own glyph, styled with the font that draws it. */
     MutableComponent streamGlyph();
 }

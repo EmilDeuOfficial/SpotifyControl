@@ -92,4 +92,45 @@ public class ClientConfig {
 
     /** Dim tracks that Spotify reports as unplayable in your country. */
     public boolean dimUnavailableTracks = true;
+
+    /**
+     * Place the lyrics of the playing track into the world as floating text. The lyrics are looked
+     * up on LRCLIB, a service outside Spotify.
+     */
+    public boolean worldLyrics = true;
+
+    /** How many words share one block. */
+    public int lyricsWordsPerPiece = 1;
+
+    /** Nearest and farthest a new piece appears in front of the player, in blocks. */
+    public int lyricsMinDistance = 10;
+    public int lyricsMaxDistance = 20;
+
+    /**
+     * Added to both distances while sprinting, on foot or flying, so the lyrics appear far enough
+     * ahead to be read before the player has run past them.
+     */
+    public int lyricsSprintExtraDistance = 15;
+
+    /** Tilt each piece of the lyrics a little at random, sideways and towards the player. */
+    public boolean lyricsTilt = true;
+
+    /** Size of the lyrics text, in percent of the normal size. */
+    public int lyricsTextSize = 75;
+
+    /** Show the button that switches the world lyrics on and off next to the queue button. */
+    public boolean showLyricsButton = true;
+
+    /** How many pieces stay in the world before the oldest one is removed. */
+    public int lyricsKept = 40;
+
+    /**
+     * When a piece of the lyrics fades out: LINE when its line has been sung, COUNT when more than
+     * {@link #lyricsKept} pieces are in the world, SECONDS after {@link #lyricsSeconds}. LINE also
+     * keeps to the count, so a long line cannot fill the world.
+     */
+    public String lyricsKeepMode = "LINE";
+
+    /** How long a piece stays in the world in the SECONDS mode. */
+    public int lyricsSeconds = 5;
 }
