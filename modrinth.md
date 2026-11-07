@@ -16,6 +16,10 @@ in sync mode, and broadcast mode captures whatever your operating system is alre
 Windows straight from the speakers with nothing to install, on other systems from a loopback device
 you select yourself.
 
+The world lyrics come from [LRCLIB](https://lrclib.net), a free and open lyrics database, because the
+Spotify Web API offers no lyrics. Only the track title and the first artist are sent there, and nothing
+at all once Lyrics in the world is switched off in the settings.
+
 <p align="center">
   <img src="https://raw.githubusercontent.com/EmilDeuOfficial/SpotifyControl/main/img/ingame.png" alt="The now playing HUD and the player bar in game">
 </p>
@@ -36,6 +40,12 @@ you select yourself.
 - Album art rendered in game with rounded corners, downloaded on demand and cached as GPU textures
 - Vector icons and panel corners rasterized at native screen resolution with anti-aliasing, so nothing looks blocky at any GUI scale
 - Now-playing HUD in any screen corner with track, artist and a progress bar
+- World lyrics: the synced lyrics of the playing song appear word by word as 3D text in front of you,
+  each word on its own block, turned towards you once and then left in place. Words never cover each
+  other, step aside for terrain, come closer and smaller in forests and caves, and move further ahead
+  while you sprint. They fade out when their line ends, after a set time or beyond a set count
+- A lyrics mark after every title in the track lists shows which songs have synced lyrics, and a
+  lyrics button next to the queue button switches the world lyrics on and off
 - Listening parties in two modes: SYNC keeps every member's own Spotify player on the same track and
   position, BROADCAST streams the host's desktop audio to the party through Simple Voice Chat
 - Locational broadcast option so everyone within a configurable block radius hears the host, or static
@@ -186,7 +196,18 @@ Client side, `config/spotifycontrol/client.json`:
   "hudShowArtist": true,
   "hudOnlyWhilePlaying": false,
   "pauseOnLeave": true,
-  "closeSpotifyOnQuit": true
+  "closeSpotifyOnQuit": true,
+  "worldLyrics": true,
+  "lyricsWordsPerPiece": 1,
+  "lyricsMinDistance": 10,
+  "lyricsMaxDistance": 20,
+  "lyricsSprintExtraDistance": 15,
+  "lyricsTilt": true,
+  "lyricsTextSize": 75,
+  "showLyricsButton": true,
+  "lyricsKept": 40,
+  "lyricsKeepMode": "LINE",
+  "lyricsSeconds": 5
 }
 ```
 
@@ -205,7 +226,7 @@ Client side, `config/spotifycontrol/client.json`:
 | `pauseGameOnOverlay` | Pause singleplayer while the overlay is open |
 | `autoLaunchSpotify` | Start the Spotify desktop app when you press play and no device is running, then move playback to it |
 | `minimizeSpotifyWindow` | Start it minimized so it does not cover the game |
-| `preferredDeviceName` | Device to prefer when several are available, empty picks the active one, then any computer |
+| `preferredDeviceName` | Device to prefer when several are available. Empty picks a computer, then the device that is already playing; speakers, TVs and speaker groups are only used when named here |
 | `captureDeviceName` | Audio source for BROADCAST mode, picked in the overlay settings, empty for the automatic speaker capture on Windows |
 | `captureVolumePercent` | Gain applied before Opus encoding, 0 to 200 |
 | `muteMinecraftMusicWhileListening` | Stop the vanilla music manager while Spotify is playing |
@@ -220,6 +241,15 @@ Client side, `config/spotifycontrol/client.json`:
 | `hudShowAlbumArt`, `hudShowProgress`, `hudShowArtist`, `hudOnlyWhilePlaying` | Parts and behaviour of the small now playing overlay |
 | `pauseOnLeave` | Pause Spotify when leaving a world or server |
 | `closeSpotifyOnQuit` | Close the Spotify desktop app when Minecraft closes |
+| `worldLyrics` | Show the lyrics of the playing song as 3D text in the world. Looks lyrics up on LRCLIB |
+| `lyricsWordsPerPiece` | How many words share one block |
+| `lyricsMinDistance` / `lyricsMaxDistance` | Range in front of you, in blocks, where new words appear |
+| `lyricsSprintExtraDistance` | Added to both distances while sprinting, on foot or flying |
+| `lyricsTilt` | Tilt each word slightly at random, sideways and towards you |
+| `lyricsTextSize` | Text size in percent |
+| `showLyricsButton` | Show the lyrics button next to the queue button |
+| `lyricsKeepMode` | When words fade out: LINE when their line ends, COUNT beyond `lyricsKept` words, SECONDS after `lyricsSeconds` |
+| `lyricsKept` / `lyricsSeconds` | Word count and lifetime used by the modes above |
 
 Tokens live in `config/spotifycontrol/tokens.json`. Delete the file or use Log out in the overlay
 settings to disconnect the account.
