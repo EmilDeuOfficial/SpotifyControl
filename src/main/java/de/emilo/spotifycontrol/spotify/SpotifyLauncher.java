@@ -66,9 +66,15 @@ public final class SpotifyLauncher {
         if (appData != null) {
             File desktop = new File(appData, "Spotify" + File.separator + "Spotify.exe");
             if (desktop.isFile()) {
-                return minimized
-                        ? start(desktop.getAbsolutePath(), "--minimized")
-                        : start(desktop.getAbsolutePath());
+                // Started through Explorer, not as a child of the game. A child inherits the
+                // environment of the Java process and the launcher that started it, and a Spotify
+                // started that way showed up as a device but never played anything sent to it.
+                // Explorer starts it exactly as a double click would.
+                boolean started = start("explorer.exe", desktop.getAbsolutePath());
+                if (started && minimized) {
+                    minimizeWindowsSpotify();
+                }
+                return started;
             }
         }
         String localAppData = System.getenv("LOCALAPPDATA");

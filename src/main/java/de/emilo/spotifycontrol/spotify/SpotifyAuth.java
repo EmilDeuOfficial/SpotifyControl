@@ -60,6 +60,22 @@ public class SpotifyAuth {
         this.tokens = tokens;
     }
 
+    private volatile String lastFailure = "";
+
+    /**
+     * Why the last token request failed, as an error code the user facing text is looked up by,
+     * or empty when it succeeded.
+     */
+    public String lastFailure() {
+        return lastFailure;
+    }
+
+    /** Hands the sentence for an error code to the status line and remembers the code. */
+    private void fail(Consumer<String> onStatus, String code, Object... placeholders) {
+        lastFailure = code;
+        onStatus.accept(Lang.plain("error." + code, placeholders));
+    }
+
     public static String redirectUri(int port) {
         return "http://127.0.0.1:" + port + "/callback";
     }
@@ -95,7 +111,7 @@ public class SpotifyAuth {
             Platform.openUri(AUTHORIZE_ENDPOINT + "?" + encode(query));
         } catch (Exception e) {
             SpotifyControl.LOGGER.error("Could not start the Spotify login", e);
-            onStatus.accept(Lang.plain("auth.failed", "error", String.valueOf(e.getMessage())));
+            fail(onStatus, "login_start", "port", ConfigManager.client().callbackPort);
             stopCallbackServer();
         }
     }
@@ -107,7 +123,8 @@ public class SpotifyAuth {
         boolean ok = code != null && state.equals(returnedState);
         respond(exchange, ok);
         if (!ok) {
-            onStatus.accept(Lang.plain("auth.failed", "error", params.getOrDefault("error", "state mismatch")));
+            SpotifyControl.LOGGER.warn("Spotify login callback rejected: {}", params.getOrDefault("error", "state mismatch"));
+            fail(onStatus, "access_denied".equals(params.get("error")) ? "auth_denied" : "auth_rejected");
             stopCallbackServer();
             return;
         }
@@ -149,9 +166,24 @@ public class SpotifyAuth {
                     .POST(HttpRequest.BodyPublishers.ofString(encode(form)))
                     .build();
             HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() / 100 != 2) {
-                onStatus.accept(Lang.plain("auth.failed", "error", "HTTP " + response.statusCode()));
-                SpotifyControl.LOGGER.error("Token request failed: {} {}", response.statusCode(), response.body());
+            int status = response.statusCode();
+            if (status / 100 != 2) {
+                SpotifyControl.LOGGER.error("Token request failed: {} {}", status, response.body());
+                String reason = "";
+                try {
+                    reason = JsonParser.parseString(response.body()).getAsJsonObject().get("error").getAsString();
+                } catch (Exception ignored) {
+                    reason = "";
+                }
+                if (status >= 500) {
+                    fail(onStatus, "server_busy");
+                } else if ("invalid_client".equals(reason)) {
+                    fail(onStatus, "auth_client");
+                } else if ("invalid_grant".equals(reason)) {
+                    fail(onStatus, "auth");
+                } else {
+                    fail(onStatus, "auth_rejected");
+                }
                 return false;
             }
             JsonObject json = JsonParser.parseString(response.body()).getAsJsonObject();
@@ -163,10 +195,11 @@ public class SpotifyAuth {
             tokens.expiresAtEpochSecond = Instant.now().getEpochSecond() + lifetime;
             tokens.clientId = ConfigManager.client().spotifyClientId.trim();
             tokens.save();
+            lastFailure = "";
             return true;
         } catch (Exception e) {
             SpotifyControl.LOGGER.error("Token request failed", e);
-            onStatus.accept(Lang.plain("auth.failed", "error", String.valueOf(e.getMessage())));
+            fail(onStatus, e instanceof java.io.IOException ? "network" : "auth_rejected");
             return false;
         }
     }

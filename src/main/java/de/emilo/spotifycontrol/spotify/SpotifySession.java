@@ -173,6 +173,7 @@ public class SpotifySession {
             // The saved tokens authenticate as the previous app and would carry its rate limit with
             // them. A different app needs its own authorization anyway, so start from scratch.
             tokens.clear();
+            api.forgetAllPages();
             api.clearRateLimit();
             connected = false;
         }
@@ -199,6 +200,7 @@ public class SpotifySession {
         worker.execute(() -> {
             auth.stopCallbackServer();
             tokens.clear();
+            api.forgetAllPages();
             connected = false;
             forcePollsLeft.set(0);
             launchNoticeUntilMillis = 0L;
@@ -305,10 +307,16 @@ public class SpotifySession {
       * as "nothing is playing", so the error is what tells them apart - without this a single
       * failed poll clears the interface and drops polling to the slow interval.
       */
+    /** The last state that had a track loaded, to pick up from when the app starts empty. */
+    private volatile PlaybackState lastLoaded;
+
     private void adoptPlayback() {
         PlaybackState fresh = api.playback();
         if (fresh.active() || api.lastError().isEmpty()) {
             playback = fresh;
+            if (fresh.active() && !fresh.track().uri().isEmpty()) {
+                lastLoaded = fresh;
+            }
             lastProgressSyncNanos = System.nanoTime();
             if (fresh.playing()) {
                 launchNoticeUntilMillis = 0L;
@@ -538,7 +546,32 @@ public class SpotifySession {
             runThenPoll(api::pause);
             return;
         }
-        withDevice(api::resume);
+        withDevice(this::resumeAnything);
+    }
+
+    /**
+     * Resumes, or starts something when there is nothing to resume. A desktop app that has just
+     * been started holds no track, and a plain resume then succeeds without playing anything. In
+     * that case the last track the mod saw is started again, in its playlist or album where it
+     * had one, and failing that the most recently played track.
+     */
+    private boolean resumeAnything(String deviceId) {
+        PlaybackState current = api.playback();
+        if (current.active() && !current.track().uri().isEmpty()) {
+            return api.resume(deviceId);
+        }
+        PlaybackState last = lastLoaded;
+        if (last != null) {
+            String track = last.track().uri();
+            return last.contextUri().isEmpty()
+                    ? api.play("", List.of(track), "", deviceId)
+                    : api.play(last.contextUri(), List.of(), track, deviceId);
+        }
+        List<Track> recent = api.recentlyPlayed();
+        if (!recent.isEmpty()) {
+            return api.play("", List.of(recent.get(0).uri()), "", deviceId);
+        }
+        return api.resume(deviceId);
     }
 
     private final AtomicBoolean deviceBusy = new AtomicBoolean();
@@ -566,7 +599,11 @@ public class SpotifySession {
         });
     }
 
+    /** Set when ensureDevice had to start the app or move playback to another device. */
+    private volatile boolean deviceJustPrepared;
+
     private void performDevice(DeviceAction action) {
+        deviceJustPrepared = false;
         String deviceId = ensureDevice();
         if (deviceId == null) {
             errorListener.accept("no_device");
@@ -578,6 +615,9 @@ public class SpotifySession {
             deviceId = ensureDevice(true);
             ok = deviceId != null && action.run(deviceId);
         }
+        if (ok && deviceJustPrepared) {
+            ok = confirmPlaying(action, deviceId);
+        }
         if (!ok && !api.lastError().isEmpty()) {
             errorListener.accept(api.lastError());
         }
@@ -585,6 +625,42 @@ public class SpotifySession {
         if (ok) {
             scheduleFollowUpPolls();
         }
+    }
+
+    /**
+      * A desktop app that has only just started, or a device playback was only just moved to,
+      * often accepts a command and then does nothing, because it is not ready yet. Spotify answers
+      * with success either way, so the only way to know is to look: if nothing plays after a
+      * moment, the command is sent again, a few times with growing pauses.
+      */
+    private boolean confirmPlaying(DeviceAction action, String deviceId) {
+        // A desktop app that is still signing in can take half a minute before it obeys, so the
+        // checks go on for that long rather than giving up after a few seconds.
+        long deadline = System.currentTimeMillis() + 30_000L;
+        for (int attempt = 0; System.currentTimeMillis() < deadline; attempt++) {
+            sleep(2_500L);
+            PlaybackState now = api.playback();
+            if (now.playing()) {
+                if (attempt > 0) {
+                    SpotifyControl.LOGGER.info("Spotify device {} started playing after {} tries", deviceId, attempt + 1);
+                }
+                return true;
+            }
+            SpotifyControl.LOGGER.info("Spotify device {} is not playing yet (attempt {}, active: {}, on: {}, track loaded: {})",
+                    deviceId, attempt + 1, now.active(), now.deviceName(), !now.track().uri().isEmpty());
+            // Every other try wakes the device with a transfer that asks it to play. Some fresh
+            // desktop apps only start reacting to commands after that.
+            boolean sent = attempt % 2 == 0 ? api.transfer(deviceId, true) && action.run(deviceId)
+                    : action.run(deviceId);
+            if (!sent) {
+                return false;
+            }
+        }
+        boolean playing = api.playback().playing();
+        if (!playing) {
+            SpotifyControl.LOGGER.warn("Spotify device {} accepted every command but never started playing", deviceId);
+        }
+        return true;
     }
 
     /**
@@ -627,13 +703,20 @@ public class SpotifySession {
             if (launchNoticeUntilMillis == 0L) {
                 launchNoticeUntilMillis = System.currentTimeMillis() + LAUNCH_NOTICE_MILLIS;
             }
-            long deadline = System.currentTimeMillis() + 45_000L;
+            deviceJustPrepared = true;
+            long deadline = System.currentTimeMillis() + 60_000L;
+            String seen = "";
             while (chosen == null && System.currentTimeMillis() < deadline
                     && api.rateLimitedForMillis() == 0L) {
                 sleep(1_500L);
                 available = api.devices();
                 publishDevices(available);
                 chosen = pickDevice(available);
+                String now = describe(available);
+                if (!now.equals(seen)) {
+                    seen = now;
+                    SpotifyControl.LOGGER.info("Waiting for the Spotify app, devices: {}", now.isEmpty() ? "none" : now);
+                }
             }
         }
         if (chosen == null) {
@@ -642,12 +725,28 @@ public class SpotifySession {
             return null;
         }
         if (!chosen.active()) {
+            deviceJustPrepared = true;
+            SpotifyControl.LOGGER.info("Moving playback to {} ({})", chosen.name(), chosen.type());
             api.transfer(chosen.id(), false);
             sleep(900L);
             toastListener.accept(Lang.plain("device.ready", "device", chosen.name()));
             publishDevices(api.devices());
         }
         return chosen.id();
+    }
+
+    /** The devices as name and type, for the log. */
+    private static String describe(List<Device> devices) {
+        StringBuilder text = new StringBuilder();
+        for (Device device : devices) {
+            if (text.length() > 0) {
+                text.append(", ");
+            }
+            text.append(device.name()).append(" (").append(device.type())
+                    .append(device.restricted() ? ", restricted" : "").append(device.active() ? ", active" : "")
+                    .append(')');
+        }
+        return text.toString();
     }
 
     private static boolean contains(List<Device> devices, String deviceId) {
@@ -682,12 +781,17 @@ public class SpotifySession {
         return null;
     }
 
+    /**
+      * The device to play on: the one named in the settings, else a computer, else whatever is
+      * already playing. An idle speaker, TV or speaker group is never picked on its own. Doing so
+      * sent the music to a group such as "Everywhere" whenever the desktop app was slow to start,
+      * and it also kept the mod from starting the app at all, because a device seemed to be there.
+      */
     private static Device pickDevice(List<Device> candidates) {
         String preferred = ConfigManager.client().preferredDeviceName.trim();
         Device activeComputer = null;
         Device computer = null;
         Device active = null;
-        Device fallback = null;
         for (Device device : candidates) {
             if (device.restricted() || device.id().isEmpty()) {
                 continue;
@@ -705,9 +809,6 @@ public class SpotifySession {
             if (device.active() && active == null) {
                 active = device;
             }
-            if (fallback == null) {
-                fallback = device;
-            }
         }
         if (activeComputer != null) {
             return activeComputer;
@@ -715,7 +816,7 @@ public class SpotifySession {
         if (computer != null) {
             return computer;
         }
-        return active != null ? active : fallback;
+        return active;
     }
 
     private static void sleep(long millis) {

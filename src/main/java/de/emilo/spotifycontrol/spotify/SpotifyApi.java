@@ -128,8 +128,44 @@ public class SpotifyApi {
         return new TrackPage(tracks, rawCount, total, complete, false);
     }
 
+    /** A page that was loaded before, and when. */
+    private record CachedPage(TrackPage page, long loadedAtMillis) {
+    }
+
+    /**
+     * Track pages that were already loaded, so opening a playlist, an album or the liked songs a
+     * second time shows them at once instead of fetching every page again. Changes made through
+     * the mod drop the affected entries; changes made elsewhere show once an entry is older than
+     * its lifetime.
+     */
+    private final Map<String, CachedPage> pageCache = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final long PLAYLIST_CACHE_MILLIS = 5L * 60_000L;
+    private static final long ALBUM_CACHE_MILLIS = 60L * 60_000L;
+
+    private TrackPage cachedPage(String key, long lifetimeMillis, java.util.function.Supplier<TrackPage> loader) {
+        CachedPage cached = pageCache.get(key);
+        if (cached != null && System.currentTimeMillis() - cached.loadedAtMillis() < lifetimeMillis) {
+            return cached.page();
+        }
+        TrackPage page = loader.get();
+        if (!page.failed()) {
+            pageCache.put(key, new CachedPage(page, System.currentTimeMillis()));
+        }
+        return page;
+    }
+
+    /** Drops every loaded page, for when another account signs in. */
+    public void forgetAllPages() {
+        pageCache.clear();
+    }
+
+    private void forgetPages(String prefix) {
+        pageCache.keySet().removeIf(key -> key.startsWith(prefix));
+    }
+
     public TrackPage playlistTrackPage(String playlistId, int offset) {
-        return trackPage("/v1/playlists/" + playlistId + "/items", offset, "item", "track");
+        return cachedPage("playlist:" + playlistId + ":" + offset, PLAYLIST_CACHE_MILLIS,
+                () -> trackPage("/v1/playlists/" + playlistId + "/items", offset, "item", "track"));
     }
 
     /** Wraps a one-shot listing, reporting failure rather than an empty result. */
@@ -138,7 +174,7 @@ public class SpotifyApi {
     }
 
     public TrackPage likedTrackPage(int offset) {
-        return trackPage("/v1/me/tracks", offset, "track");
+        return cachedPage("liked:" + offset, PLAYLIST_CACHE_MILLIS, () -> trackPage("/v1/me/tracks", offset, "track"));
     }
 
     /**
@@ -146,7 +182,8 @@ public class SpotifyApi {
       * passed in from the item the user opened instead of costing an extra request per page.
       */
     public TrackPage albumTrackPage(String albumId, int offset, String albumName, String artwork) {
-        TrackPage page = trackPage("/v1/albums/" + albumId + "/tracks", offset);
+        TrackPage page = cachedPage("album:" + albumId + ":" + offset, ALBUM_CACHE_MILLIS,
+                () -> trackPage("/v1/albums/" + albumId + "/tracks", offset));
         if (page.failed()) {
             return page;
         }
@@ -289,7 +326,24 @@ public class SpotifyApi {
         return new SearchResults(query, tracks, playlists, albums, artists);
     }
 
+    /**
+     * Starts playback.
+     *
+     * <p>Spotify currently accepts a bare list of tracks ({@code uris}) with success and then plays
+     * nothing: the device even unloads what it was playing. Starting a playlist, an album or the
+     * liked songs ({@code context_uri}) works. So a request for single tracks is turned into the
+     * album of the first track, starting at that track. If the album cannot be found the track
+     * list is still sent, which is no worse than before.</p>
+     */
     public boolean play(String contextUri, List<String> trackUris, String offsetUri, String deviceId) {
+        if ((contextUri == null || contextUri.isEmpty()) && trackUris != null && !trackUris.isEmpty()) {
+            String first = trackUris.get(0);
+            String album = albumOf(first);
+            if (!album.isEmpty()) {
+                contextUri = album;
+                offsetUri = first;
+            }
+        }
         JsonObject body = new JsonObject();
         if (contextUri != null && !contextUri.isEmpty()) {
             body.addProperty("context_uri", contextUri);
@@ -307,6 +361,16 @@ public class SpotifyApi {
         }
         Map<String, String> query = deviceId == null || deviceId.isEmpty() ? Map.of() : Map.of("device_id", deviceId);
         return send("PUT", "/v1/me/player/play", query, body.toString());
+    }
+
+    /** The album a track belongs to, as a Spotify URI, or empty when it cannot be found. */
+    private String albumOf(String trackUri) {
+        if (trackUri == null || !trackUri.startsWith("spotify:track:")) {
+            return "";
+        }
+        JsonObject track = get("/v1/tracks/" + trackUri.substring("spotify:track:".length()), Map.of());
+        JsonObject album = track == null ? null : Json.object(track, "album");
+        return album == null ? "" : Json.string(album, "uri");
     }
 
     public boolean resume(String deviceId) {
@@ -381,6 +445,7 @@ public class SpotifyApi {
       * consolidated {@code /v1/me/library} endpoints, which take Spotify URIs rather than bare ids.
       */
     public boolean like(String trackId, boolean liked) {
+        forgetPages("liked:");
         return send(liked ? "PUT" : "DELETE", "/v1/me/library",
                 Map.of("uris", "spotify:track:" + trackId), null);
     }
@@ -417,6 +482,7 @@ public class SpotifyApi {
         JsonArray uris = new JsonArray();
         uris.add(trackUri);
         body.add("uris", uris);
+        forgetPages("playlist:" + playlistId + ":");
         return send("POST", "/v1/playlists/" + playlistId + "/items", Map.of(), body.toString());
     }
 
@@ -427,6 +493,7 @@ public class SpotifyApi {
         entry.addProperty("uri", trackUri);
         items.add(entry);
         body.add("items", items);
+        forgetPages("playlist:" + playlistId + ":");
         return send("DELETE", "/v1/playlists/" + playlistId + "/items", Map.of(), body.toString());
     }
 
@@ -451,6 +518,7 @@ public class SpotifyApi {
         body.addProperty("range_start", from);
         body.addProperty("insert_before", to > from ? to + 1 : to);
         body.addProperty("range_length", 1);
+        forgetPages("playlist:" + playlistId + ":");
         return send("PUT", "/v1/playlists/" + playlistId + "/items", Map.of(), body.toString());
     }
 
@@ -565,13 +633,17 @@ public class SpotifyApi {
         int lastStatus = 0;
         int rateLimitRetries = 0;
         int authRetries = 0;
+        int serverRetries = 0;
         for (int attempt = 0; attempt < 6; attempt++) {
-            if (!auth.refreshIfNeeded(error -> lastError = error)) {
-                lastError = "not connected";
+            if (!auth.refreshIfNeeded(message -> { })) {
+                lastError = auth.lastFailure().isEmpty() ? "not_connected" : auth.lastFailure();
                 return null;
             }
             try {
+                // Without a time limit one request that never gets an answer holds the single
+                // worker thread forever, and every later command waits behind it.
                 HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(BASE + path + encode(query)))
+                        .timeout(Duration.ofSeconds(15))
                         .header("Authorization", "Bearer " + tokens.accessToken)
                         .timeout(Duration.ofSeconds(15));
                 if (body == null) {
@@ -605,12 +677,25 @@ public class SpotifyApi {
                     Thread.sleep(retryAfter * 1000L);
                     continue;
                 }
+                if (isServerTrouble(status) && serverRetries++ < 1) {
+                    // Spotify answers 5xx while it is overloaded or restarting. That usually passes
+                    // within a second, so one quiet retry spares the user an error for a blip.
+                    lastStatus = status;
+                    Thread.sleep(1000L);
+                    continue;
+                }
                 if (status == 204) {
                     lastError = "";
                     return "";
                 }
                 if (status / 100 == 2) {
                     clearRateLimit();
+                }
+                if (status == 202 || (status / 100 == 2 && status != 200 && path.startsWith("/v1/me/player")
+                        && !"GET".equals(method))) {
+                    // 202 means Spotify accepted the command but the device has not taken it yet.
+                    // Worth seeing in the log when a device seems to ignore commands.
+                    SpotifyControl.LOGGER.info("Spotify {} {} answered {}", method, path, status);
                 }
                 if (status / 100 != 2) {
                     lastError = describeError(status, path, response.body());
@@ -621,11 +706,12 @@ public class SpotifyApi {
                 lastError = "";
                 return response.body();
             } catch (InterruptedException e) {
-                lastError = "interrupted";
+                // Only happens while the game shuts down, which is no news to the user.
+                lastError = "";
                 Thread.currentThread().interrupt();
                 return null;
             } catch (Exception e) {
-                lastError = e.getMessage() == null ? e.toString() : e.getMessage();
+                lastError = e instanceof java.io.IOException ? "network" : "unknown";
                 SpotifyControl.LOGGER.warn("Spotify request failed: {} {}", method, path, e);
                 return null;
             }
@@ -633,8 +719,8 @@ public class SpotifyApi {
         lastError = switch (lastStatus) {
             case 429 -> "rate_limited";
             case 401 -> "auth";
-            case 0 -> "no response";
-            default -> "HTTP " + lastStatus;
+            case 0 -> "network";
+            default -> isServerTrouble(lastStatus) ? "server_busy" : "unknown";
         };
         SpotifyControl.LOGGER.warn("Spotify {} {} gave up after retries: {}", method, path, lastError);
         return null;
@@ -666,6 +752,11 @@ public class SpotifyApi {
             "NOT_PLAYING_CONTEXT", "NOT_PLAYING_LOCALLY", "NO_PREV_TRACK", "NO_NEXT_TRACK",
             "NO_SPECIFIC_TRACK", "ENDLESS_CONTEXT", "CONTEXT_DISALLOW", "UNKNOWN");
 
+    /** Errors on Spotify's side that say nothing about the request and pass by themselves. */
+    private static boolean isServerTrouble(int status) {
+        return status == 500 || status == 502 || status == 503 || status == 504;
+    }
+
     private String describeError(int status, String path, String body) {
         String reason = "";
         String message = "";
@@ -695,8 +786,19 @@ public class SpotifyApi {
         if (status == 403 && path.startsWith("/v1/playlists/")) {
             return "playlist_locked";
         }
-        // A bare 403 means many things. Only Spotify's own reason may claim "premium".
-        return message.isEmpty() ? "HTTP " + status : message;
+        if (isServerTrouble(status)) {
+            return "server_busy";
+        }
+        // A bare 403 means many things. Only Spotify's own reason may claim "premium". Spotify's
+        // own message is technical English, so it goes to the log only and the user gets a plain
+        // sentence for the kind of failure.
+        return switch (status) {
+            case 400 -> "bad_request";
+            case 401 -> "auth";
+            case 403 -> "forbidden";
+            case 404 -> "not_found";
+            default -> "unknown";
+        };
     }
 
     private static final String QUERY_SAFE =

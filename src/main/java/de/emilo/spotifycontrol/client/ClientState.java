@@ -46,7 +46,12 @@ public final class ClientState {
         if (error.isEmpty()) {
             return;
         }
-        toast(switch (error) {
+        toast(describeApiError(error));
+    }
+
+    /** Turns an error code from the Spotify API into the sentence shown to the user. */
+    public static String describeApiError(String error) {
+        return switch (error) {
             case "premium" -> Lang.plain("gui.premium_required");
             case "no_device" -> Lang.plain("gui.no_device");
             case "rate_limited" -> session.rateLimitedForMillis() > 0L
@@ -54,8 +59,13 @@ public final class ClientState {
                             SpotifySession.formatDuration(session.rateLimitedForMillis()))
                     : Lang.plain("gui.rate_limited");
             case "playlist_locked" -> Lang.plain("gui.playlist_locked");
-            default -> Lang.plain("gui.error", "error", error);
-        });
+            case "server_busy" -> Lang.plain("gui.server_busy");
+            case "network", "auth", "auth_client", "not_connected", "bad_request", "forbidden",
+                 "not_found" -> Lang.plain("error." + error);
+            // Anything else is an internal code or text that would mean nothing to the user. It is
+            // already in the log with the details.
+            default -> Lang.plain("error.unknown");
+        };
     }
 
     public static SpotifySession session() {

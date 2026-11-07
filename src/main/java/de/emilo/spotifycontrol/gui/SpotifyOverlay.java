@@ -383,7 +383,9 @@ public class SpotifyOverlay {
         detailTitle = Lang.plain("gui.liked");
         detailSubtitle = ClientState.session().tokens().displayName;
         detailArtUrl = "";
-        detailContextUri = "";
+        // The liked songs are a context of their own, which plays in order from the row clicked.
+        String userId = ClientState.session().tokens().userId;
+        detailContextUri = userId.isEmpty() ? "" : "spotify:user:" + userId + ":collection";
         detailOwnedPlaylistId = "";
         beginListing(null, true, 0);
     }
@@ -1376,7 +1378,8 @@ public class SpotifyOverlay {
             }
             String error = session.api().lastError();
             Minecraft.getInstance().execute(() -> {
-                ClientState.toast(error.isEmpty() ? Lang.plain("gui.reorder_failed") : error);
+                ClientState.toast(error.isEmpty() ? Lang.plain("gui.reorder_failed")
+                        : ClientState.describeApiError(error));
                 if (view == View.DETAIL && playlistId.equals(detailOwnedPlaylistId) && item != null) {
                     openDetail(item);
                 }

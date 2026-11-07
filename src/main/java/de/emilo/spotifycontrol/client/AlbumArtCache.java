@@ -165,7 +165,10 @@ public class AlbumArtCache {
                 .build();
         HttpResponse<byte[]> response = http.send(request, HttpResponse.BodyHandlers.ofByteArray());
         if (response.statusCode() / 100 != 2) {
-            throw new IllegalStateException("HTTP " + response.statusCode() + " for " + url);
+            int status = response.statusCode();
+            // Shown in the diagnostics, so it says what happened rather than which code came back.
+            throw new IllegalStateException(status >= 500 ? "Spotify's image server is overloaded"
+                    : status == 404 ? "the cover no longer exists" : "the image server refused the download");
         }
         return response.body();
     }
@@ -244,7 +247,8 @@ public class AlbumArtCache {
         int at = key.lastIndexOf('@');
         retryAfter.put(at > 0 ? key.substring(0, at) : key, System.currentTimeMillis() + RETRY_DELAY_MILLIS);
         int count = failures.incrementAndGet();
-        lastError = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+        lastError = e instanceof java.io.IOException ? "no connection to the image server"
+                : e.getMessage() == null ? "the image could not be read" : e.getMessage();
         if (count <= LOGGED_FAILURES) {
             SpotifyControl.LOGGER.warn("Album art failed for {}: {}", key, lastError, e);
         }
