@@ -61,7 +61,7 @@ public final class ClientState {
             case "playlist_locked" -> Lang.plain("gui.playlist_locked");
             case "server_busy" -> Lang.plain("gui.server_busy");
             case "network", "auth", "auth_client", "not_connected", "bad_request", "forbidden",
-                 "not_found" -> Lang.plain("error." + error);
+                 "not_found", "user_not_registered" -> Lang.plain("error." + error);
             // Anything else is an internal code or text that would mean nothing to the user. It is
             // already in the log with the details.
             default -> Lang.plain("error.unknown");

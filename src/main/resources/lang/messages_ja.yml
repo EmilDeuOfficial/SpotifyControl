@@ -96,6 +96,7 @@ error.forbidden: "Spotifyはこのアカウントまたはこのアプリでの�
 error.not_found: "Spotifyで見つかりません。削除された可能性があります。"
 error.server_busy: "Spotifyのサーバーが混雑しています。しばらくしてからもう一度お試しください。"
 error.unknown: "Spotify側で問題が発生しました。もう一度お試しください。"
+error.user_not_registered: "Spotifyはこのアカウントでのアプリの利用を許可していません。アプリの所有者がSpotify開発者ダッシュボードのUser Managementにあなたのアカウントを追加するか、ご自身でアプリを作成してください。"
 gui.tracks: "{count} 曲"
 gui.loading_more: "さらに読み込んでいます ..."
 gui.queue_fixed: "Spotify はキューの並べ替えに対応していません"

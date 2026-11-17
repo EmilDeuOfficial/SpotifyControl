@@ -96,6 +96,7 @@ error.forbidden: "Spotify не разрешает это для твоего а�
 error.not_found: "Spotify больше не находит это. Возможно, оно было удалено."
 error.server_busy: "Серверы Spotify сейчас перегружены. Попробуй ещё раз чуть позже."
 error.unknown: "Что-то пошло не так на стороне Spotify. Попробуй ещё раз."
+error.user_not_registered: "Spotify не разрешает этому аккаунту пользоваться приложением. Владелец приложения должен добавить твой аккаунт Spotify в User Management на панели разработчика Spotify, или создай своё приложение."
 gui.tracks: "{count} треков"
 gui.loading_more: "Загружаются другие треки ..."
 gui.queue_fixed: "Spotify не позволяет менять порядок очереди"

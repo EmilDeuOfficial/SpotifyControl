@@ -789,6 +789,12 @@ public class SpotifyApi {
         if (isServerTrouble(status)) {
             return "server_busy";
         }
+        // The first thing asked after a login. While an app is in development mode, Spotify lets
+        // any account confirm the login but answers 403 to every call of an account the owner of
+        // the app has not added under User Management.
+        if (status == 403 && path.equals("/v1/me")) {
+            return "user_not_registered";
+        }
         // A bare 403 means many things. Only Spotify's own reason may claim "premium". Spotify's
         // own message is technical English, so it goes to the log only and the user gets a plain
         // sentence for the kind of failure.

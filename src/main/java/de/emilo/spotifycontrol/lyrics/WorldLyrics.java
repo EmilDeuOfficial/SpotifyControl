@@ -114,6 +114,7 @@ public final class WorldLyrics {
         final double textHalf;
         /** The pose last applied, so a transformation is only sent when the word has moved. */
         LyricsAnimation.Pose lastPose = LyricsAnimation.Pose.REST;
+        int lastAlpha = -1;
         int age;
         /** Ticks into the fade out, or -1 while the piece is still on. */
         int fading = -1;
@@ -163,6 +164,8 @@ public final class WorldLyrics {
     private static final Random random = new Random();
     private static int nextEntityId = -2_000_000;
     private static int spawnCount;
+    /** When the last game tick ran, so the frames in between can tell how far into the next one they are. */
+    private static long lastTickNanos = System.nanoTime();
 
     private static String trackUri = "";
     private static volatile String loadedUri = "";
@@ -348,39 +351,72 @@ public final class WorldLyrics {
         return Math.max(0, config.lyricsFadeOutMillis / 50);
     }
 
+    /**
+     * Runs once per game tick: decides which words are due to fade, counts every word one tick
+     * further along and removes the ones that are gone.
+     */
     private static void animate(View view, long progress) {
         ClientConfig config = ConfigManager.client();
         separate(view);
         expire(config, progress);
-        int in = inTicks(config);
         int out = outTicks(config);
-        LyricsAnimation inStyle = LyricsAnimation.of(config.lyricsInStyle);
-        LyricsAnimation outStyle = LyricsAnimation.of(config.lyricsOutStyle);
         Iterator<Placed> it = placed.iterator();
         while (it.hasNext()) {
             Placed piece = it.next();
             piece.age++;
-            float hidden;
-            LyricsAnimation.Pose pose;
             if (piece.fading >= 0) {
                 piece.fading++;
                 if (piece.fading >= out) {
                     discard(piece);
                     it.remove();
-                    continue;
                 }
-                hidden = LyricsAnimation.ease((float) piece.fading / out);
+            }
+        }
+        lastTickNanos = System.nanoTime();
+        updateVisuals(0.0f);
+    }
+
+    /**
+     * Runs once per frame, between the game's 20 ticks, so the animations move at the frame rate
+     * instead of in steps of a twentieth of a second. It only draws: counting and removing stay
+     * with the tick, so a hidden HUD, which stops the frame calls, leaves the animation running
+     * at tick pace rather than frozen.
+     */
+    public static void frame() {
+        if (placed.isEmpty() || level == null) {
+            return;
+        }
+        float partial = Math.min(1.0f, (System.nanoTime() - lastTickNanos) / 50_000_000.0f);
+        updateVisuals(partial);
+    }
+
+    /** Sets opacity and pose of every word from how far along it is, {@code partial} ticks included. */
+    private static void updateVisuals(float partial) {
+        ClientConfig config = ConfigManager.client();
+        float in = Math.max(1, inTicks(config));
+        float out = Math.max(1, outTicks(config));
+        boolean fadesIn = inTicks(config) > 0;
+        LyricsAnimation inStyle = LyricsAnimation.of(config.lyricsInStyle);
+        LyricsAnimation outStyle = LyricsAnimation.of(config.lyricsOutStyle);
+        for (Placed piece : placed) {
+            float hidden;
+            LyricsAnimation.Pose pose;
+            if (piece.fading >= 0) {
+                hidden = LyricsAnimation.ease(Math.min(1.0f, (piece.fading + partial) / out));
                 pose = outStyle.pose(true, hidden);
-            } else if (piece.age < in) {
-                hidden = 1.0f - LyricsAnimation.ease((float) piece.age / in);
+            } else if (fadesIn && piece.age + partial < in) {
+                hidden = 1.0f - LyricsAnimation.ease((piece.age + partial) / in);
                 pose = inStyle.pose(false, hidden);
             } else {
                 hidden = 0.0f;
                 pose = LyricsAnimation.Pose.REST;
             }
             int alpha = alphaOf(1.0f - hidden);
-            ((TextDisplayAccess) piece.front).spotifycontrol$setTextOpacity((byte) alpha);
-            ((TextDisplayAccess) piece.back).spotifycontrol$setTextOpacity((byte) alpha);
+            if (alpha != piece.lastAlpha) {
+                piece.lastAlpha = alpha;
+                ((TextDisplayAccess) piece.front).spotifycontrol$setTextOpacity((byte) alpha);
+                ((TextDisplayAccess) piece.back).spotifycontrol$setTextOpacity((byte) alpha);
+            }
             if (!pose.equals(piece.lastPose)) {
                 piece.lastPose = pose;
                 applyTransform(piece.front, piece.scale, piece.textHalf, piece.pitch, piece.roll, pose, false);

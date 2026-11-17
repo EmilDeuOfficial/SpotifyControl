@@ -27,6 +27,8 @@ public class SpotifyControlClient implements ClientModInitializer {
 
         ClientTickEvents.END_CLIENT_TICK.register(this::onClientTick);
         Platform.registerHud(NowPlayingHud::render);
+        // Once per frame, not only per tick, so the lyrics animations are smooth.
+        Platform.registerHud(graphics -> WorldLyrics.frame());
 
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
             ClientState.setParty(PartyStatePayload.NONE);

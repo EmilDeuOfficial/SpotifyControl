@@ -78,8 +78,11 @@ inside a public mod.
 4. In Minecraft, press Ctrl + M, open Settings in the sidebar and paste the client ID. The Help button next to the field opens the wiki page that explains it.
 5. Click Connect to Spotify. A browser tab opens, you approve the scopes, and the tab closes itself.
 
-You need a Spotify Premium account to use the mod. Spotify only lets Premium accounts create the app in
-step 1, so without Premium there is no client ID to paste and the mod cannot connect.
+Spotify only lets Premium accounts create the app in step 1, and playback control needs Premium on the
+account that is logged in. A friend can log in through your app instead of making their own, but you have
+to add their Spotify account under User Management in your app's settings on the dashboard first. Without
+that, Spotify lets them confirm the login and then refuses the account, and the mod says so. Spotify limits
+how many users an app can have.
 
 Spotify also needs a playback device, because the Web API controls a Spotify player rather than being
 one. You do not have to manage that yourself: when you press play and nothing is running, the mod
@@ -328,7 +331,7 @@ the mod carries one implementation per generation and picks the right one when i
 | 1.21.11 | `platform.impl.f` | `ResourceLocation` renamed to `Identifier`, `Util` moved, permission sets |
 
 Each implementation is two classes. Everything else, roughly 60 classes, is shared and compiles to
-byte-identical code on every generation. The release is a single file, `SpotifyControl_1.2_1.21.x_BETA.jar`.
+byte-identical code on every generation. The release is a single file, `SpotifyControl_1.2.1_1.21.x_BETA.jar`.
 
 ## Requirements
 
@@ -340,7 +343,7 @@ byte-identical code on every generation. The release is a single file, `SpotifyC
 | Java | 21+ |
 | Simple Voice Chat | 2.5+, optional, only for BROADCAST mode |
 | Mod Menu | Optional, adds a Configure button |
-| Spotify | Premium, needed to create the app that provides the client ID |
+| Spotify | Premium to create the app and to control playback |
 
 Forge, NeoForge and Quilt are not supported.
 
@@ -348,7 +351,7 @@ Forge, NeoForge and Quilt are not supported.
 
 1. Install Fabric Loader 0.16 or newer.
 2. Drop Fabric API into `mods/`.
-3. Drop `SpotifyControl_1.2_1.21.x_BETA.jar` into `mods/`. It runs on every Minecraft version from 1.21
+3. Drop `SpotifyControl_1.2.1_1.21.x_BETA.jar` into `mods/`. It runs on every Minecraft version from 1.21
    to 1.21.11.
 4. For listening parties, install the mod on the server as well. For BROADCAST mode, install Simple
    Voice Chat on both sides.
@@ -402,7 +405,7 @@ normally without it.
 ```
 
 This compiles the mod once per API generation (1.21.1, 1.21.4, 1.21.5, 1.21.8, 1.21.10 and 1.21.11)
-into `build/generations/` and merges the six results into `versions/SpotifyControl_1.2_1.21.x.jar`:
+into `build/generations/` and merges the six results into `versions/SpotifyControl_1.2.1_1.21.x.jar`:
 the shared classes come from the first build, the `platform.impl.*` package from each. The two steps
 by hand are `./gradlew build stageGenerationJar -Pmc=<version>` per generation and `./gradlew
 universalJar` for the merge. A plain `./gradlew build -Pmc=1.21.8` still produces a development jar

@@ -152,7 +152,11 @@ public class SpotifySession {
         connecting = true;
         connectingSinceMillis = System.currentTimeMillis();
         worker.execute(() -> {
-            boolean ok = auth.refreshIfNeeded(message -> status = message) && api.loadProfile();
+            boolean refreshed = auth.refreshIfNeeded(message -> status = message);
+            boolean ok = refreshed && api.loadProfile();
+            if (refreshed && !ok) {
+                rejectProfile();
+            }
             connecting = false;
             connected = ok;
             if (ok) {
@@ -192,8 +196,28 @@ public class SpotifySession {
                 status = "";
                 refreshLibrary();
                 pollNow();
+            } else {
+                rejectProfile();
             }
         }));
+    }
+
+    /**
+     * Tells the user why the account could not be used after a login that Spotify accepted. An
+     * account the app's owner has not registered is signed out again, because its tokens are no
+     * use to anyone; any other failure keeps them, since a connection that dropped should not cost
+     * the login.
+     */
+    private void rejectProfile() {
+        String error = api.lastError();
+        status = switch (error) {
+            case "user_not_registered" -> Lang.plain("error.user_not_registered");
+            case "network", "server_busy", "auth" -> Lang.plain("error." + error);
+            default -> Lang.plain("error.unknown");
+        };
+        if ("user_not_registered".equals(error)) {
+            tokens.clear();
+        }
     }
 
     public void logout() {

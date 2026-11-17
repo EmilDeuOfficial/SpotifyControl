@@ -96,6 +96,7 @@ error.forbidden: "Spotify ne permet pas cela pour votre compte ou cette applicat
 error.not_found: "Spotify ne trouve plus cet element. Il a peut-etre ete supprime."
 error.server_busy: "Les serveurs de Spotify sont surcharges. Reessayez dans un instant."
 error.unknown: "Un probleme est survenu chez Spotify. Reessayez."
+error.user_not_registered: "Spotify n'autorise pas ce compte dans l'application. Le proprietaire de l'application doit ajouter votre compte Spotify dans User Management du tableau de bord developpeur Spotify, ou vous creez votre propre application."
 gui.tracks: "{count} titres"
 gui.loading_more: "Chargement d'autres titres ..."
 gui.queue_fixed: "Spotify ne permet pas de reordonner la file d'attente"
