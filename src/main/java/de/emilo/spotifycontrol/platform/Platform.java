@@ -217,6 +217,16 @@ public final class Platform {
         return api().withFont(style, namespace, path);
     }
 
+    public static void pushTransform(GuiGraphics graphics, float translateX, float translateY, float rotation,
+                                     float scaleX, float scaleY) {
+        api().pushTransform(graphics, translateX, translateY, rotation, scaleX, scaleY);
+    }
+
+    public static void drawText(GuiGraphics graphics, Font font, Component text, int x, int y, int color,
+                                boolean shadow) {
+        api().drawText(graphics, font, text, x, y, color, shadow);
+    }
+
     public static MutableComponent streamGlyph() {
         return api().streamGlyph();
     }

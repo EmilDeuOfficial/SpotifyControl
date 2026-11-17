@@ -86,6 +86,17 @@ public interface PlatformApi {
      */
     net.minecraft.network.chat.Style withFont(net.minecraft.network.chat.Style style, String namespace, String path);
 
+    /**
+     * Translates, then turns by {@code rotation} radians, then scales by the two factors, for
+     * everything drawn until the matching {@link #popMatrix}. The matrix types differ between
+     * the generations: a pose stack up to 1.21.5 and a 2D matrix stack from 1.21.6 on.
+     */
+    void pushTransform(GuiGraphics graphics, float translateX, float translateY, float rotation, float scaleX,
+                       float scaleY);
+
+    /** Draws styled text, so a word can be shown in a font other than the default one. */
+    void drawText(GuiGraphics graphics, Font font, Component text, int x, int y, int color, boolean shadow);
+
     /** The mod's own glyph, styled with the font that draws it. */
     MutableComponent streamGlyph();
 }

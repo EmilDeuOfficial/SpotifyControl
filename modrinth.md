@@ -49,8 +49,8 @@ at all once Lyrics in the world is switched off in the settings.
 - World lyrics: the synced lyrics of the playing song appear word by word as 3D text in front of you,
   each word on its own block, turned towards you once and then left in place. Words never cover each
   other, step aside for terrain, come closer and smaller in forests and caves, and move further ahead
-  while you sprint. They fade out when their line ends, after a set time or beyond a set count, and font, bold text,
-  fade times and the appear and disappear movements are adjustable
+  while you sprint. They fade out when their line ends, after a set time or beyond a set count, and the font, the
+  fade times and the appear and disappear animation are picked from lists with a live preview in the settings
 - A lyrics mark after every title in the track lists shows which songs have synced lyrics, and a
   lyrics button next to the queue button switches the world lyrics on and off
 - Listening parties in two modes: SYNC keeps every member's own Spotify player on the same track and
@@ -78,7 +78,7 @@ inside a public mod.
 2. Add `http://127.0.0.1:8888/callback` as a redirect URI. If you change `callbackPort` in the config,
    use that port instead.
 3. Copy the client ID from the app page.
-4. In Minecraft, press Ctrl + M, open Settings in the sidebar and paste the client ID.
+4. In Minecraft, press Ctrl + M, open Settings in the sidebar and paste the client ID. The Help button next to the field opens the wiki page that explains it.
 5. Click Connect to Spotify. A browser tab opens, you approve the scopes, and the tab closes itself.
 
 You need a Spotify Premium account to use the mod. Spotify only lets Premium accounts create the app in
@@ -258,9 +258,9 @@ Client side, `config/spotifycontrol/client.json`:
 | `lyricsMinDistance` / `lyricsMaxDistance` | Range in front of you, in blocks, where new words appear |
 | `lyricsSprintExtraDistance` | Added to both distances while sprinting, on foot or flying |
 | `lyricsTilt` | Tilt each word slightly at random, sideways and towards you |
-| `lyricsFont` / `lyricsBold` | Font of the words: `DEFAULT`, `UNIFONT`, `GALACTIC` (enchanting table) or `ILLAGER`, and whether they are bold. The last two are ciphers, not readable text |
+| `lyricsFont` / `lyricsBold` | Font of the words and whether they are bold. `DEFAULT`, `UNIFONT`, `GALACTIC` and `ILLAGER` come with Minecraft, the last two being ciphers that cannot be read. `PACIFICO`, `LOBSTER`, `BANGERS`, `PIXEL` (Press Start 2P), `ORBITRON`, `CREEPSTER` and `MARKER` (Permanent Marker) are bundled with the mod |
 | `lyricsFadeInMillis` / `lyricsFadeOutMillis` | How long a word takes to appear and to disappear, in milliseconds, 0 for instantly |
-| `lyricsInStyle` / `lyricsOutStyle` | What a word does while it appears and disappears: `FADE` only fades, `GROW` also grows or shrinks, `RISE` also drifts up |
+| `lyricsInStyle` / `lyricsOutStyle` | What a word does while it appears and disappears, on top of fading: `FADE`, `GROW`, `POP`, `RISE`, `DROP`, `SLIDE`, `SPIN` or `FLIP` |
 | `lyricsTextSize` | Text size in percent |
 | `showLyricsButton` | Show the lyrics button next to the queue button |
 | `lyricsKeepMode` | When words fade out: LINE when their line ends, COUNT beyond `lyricsKept` words, SECONDS after `lyricsSeconds` |
@@ -331,7 +331,7 @@ the mod carries one implementation per generation and picks the right one when i
 | 1.21.11 | `platform.impl.f` | `ResourceLocation` renamed to `Identifier`, `Util` moved, permission sets |
 
 Each implementation is two classes. Everything else, roughly 60 classes, is shared and compiles to
-byte-identical code on every generation. The release is a single file, `SpotifyControl_1.1_1.21.x_BETA.jar`.
+byte-identical code on every generation. The release is a single file, `SpotifyControl_1.2_1.21.x_BETA.jar`.
 
 ### Requirements
 
@@ -345,7 +345,7 @@ byte-identical code on every generation. The release is a single file, `SpotifyC
 | Mod Menu | Optional, adds a Configure button |
 | Spotify | Premium, needed to create the app that provides the client ID |
 
-Drop `SpotifyControl_1.1_1.21.x_BETA.jar` into `mods/` together with Fabric API. It covers every
+Drop `SpotifyControl_1.2_1.21.x_BETA.jar` into `mods/` together with Fabric API. It covers every
 Minecraft version from 1.21 to 1.21.11. For listening parties the mod has to be on the server as
 well, and BROADCAST mode needs Simple Voice Chat on both sides. Forge, NeoForge and Quilt are not
 supported.
@@ -390,5 +390,9 @@ relays each frame straight into a `StaticAudioChannel` per listener, or into one
 `LocationalAudioChannel` at the host position when `broadcastRangeBlocks` is above 0. Simple Voice
 Chat classes are only touched behind a `FabricLoader.isModLoaded("voicechat")` check, so the mod runs
 normally without it.
+
+### Credits
+
+The extra lyrics fonts are bundled unmodified from the [Google Fonts](https://github.com/google/fonts) repository: Pacifico, Lobster, Bangers, Press Start 2P, Orbitron and Creepster under the SIL Open Font License 1.1, and Permanent Marker under the Apache License 2.0. The license texts are in the `licenses` folder of the jar.
 
 Spotify is a trademark of Spotify AB, which is not affiliated with this project.

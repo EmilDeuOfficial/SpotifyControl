@@ -112,9 +112,8 @@ public final class WorldLyrics {
         final float pitch;
         final float roll;
         final double textHalf;
-        /** The size factor and the lift last applied, so a transformation is only sent when it moved. */
-        float lastMul = 1.0f;
-        float lastLift = 0.0f;
+        /** The pose last applied, so a transformation is only sent when the word has moved. */
+        LyricsAnimation.Pose lastPose = LyricsAnimation.Pose.REST;
         int age;
         /** Ticks into the fade out, or -1 while the piece is still on. */
         int fading = -1;
@@ -355,14 +354,14 @@ public final class WorldLyrics {
         expire(config, progress);
         int in = inTicks(config);
         int out = outTicks(config);
+        LyricsAnimation inStyle = LyricsAnimation.of(config.lyricsInStyle);
+        LyricsAnimation outStyle = LyricsAnimation.of(config.lyricsOutStyle);
         Iterator<Placed> it = placed.iterator();
         while (it.hasNext()) {
             Placed piece = it.next();
             piece.age++;
-            int alpha;
-            float mul = 1.0f;
-            float lift = 0.0f;
-            float lineHeight = (float) (piece.textHalf * 2.0);
+            float hidden;
+            LyricsAnimation.Pose pose;
             if (piece.fading >= 0) {
                 piece.fading++;
                 if (piece.fading >= out) {
@@ -370,38 +369,24 @@ public final class WorldLyrics {
                     it.remove();
                     continue;
                 }
-                float t = ease((float) piece.fading / out);
-                alpha = alphaOf(1.0f - t);
-                if ("GROW".equals(config.lyricsOutStyle)) {
-                    mul = 1.0f - 0.5f * t;
-                } else if ("RISE".equals(config.lyricsOutStyle)) {
-                    lift = lineHeight * t;
-                }
+                hidden = LyricsAnimation.ease((float) piece.fading / out);
+                pose = outStyle.pose(true, hidden);
             } else if (piece.age < in) {
-                float t = ease((float) piece.age / in);
-                alpha = alphaOf(t);
-                if ("GROW".equals(config.lyricsInStyle)) {
-                    mul = 0.5f + 0.5f * t;
-                } else if ("RISE".equals(config.lyricsInStyle)) {
-                    lift = -lineHeight * (1.0f - t);
-                }
+                hidden = 1.0f - LyricsAnimation.ease((float) piece.age / in);
+                pose = inStyle.pose(false, hidden);
             } else {
-                alpha = 255;
+                hidden = 0.0f;
+                pose = LyricsAnimation.Pose.REST;
             }
+            int alpha = alphaOf(1.0f - hidden);
             ((TextDisplayAccess) piece.front).spotifycontrol$setTextOpacity((byte) alpha);
             ((TextDisplayAccess) piece.back).spotifycontrol$setTextOpacity((byte) alpha);
-            if (mul != piece.lastMul || lift != piece.lastLift) {
-                piece.lastMul = mul;
-                piece.lastLift = lift;
-                applyTransform(piece.front, piece.scale, piece.textHalf, piece.pitch, piece.roll, mul, lift);
-                applyTransform(piece.back, piece.scale, piece.textHalf, -piece.pitch, -piece.roll, mul, lift);
+            if (!pose.equals(piece.lastPose)) {
+                piece.lastPose = pose;
+                applyTransform(piece.front, piece.scale, piece.textHalf, piece.pitch, piece.roll, pose, false);
+                applyTransform(piece.back, piece.scale, piece.textHalf, -piece.pitch, -piece.roll, pose, true);
             }
         }
-    }
-
-    private static float ease(float t) {
-        float clamped = Math.max(0.0f, Math.min(1.0f, t));
-        return clamped * clamped * (3.0f - 2.0f * clamped);
     }
 
     private static int alphaOf(float t) {
@@ -476,8 +461,8 @@ public final class WorldLyrics {
         int accent = Theme.accent();
         int color = spawnCount++ % 2 == 0 ? accent : Theme.mix(accent, 0xFFFFFFFF, 0.45f);
         Component text = Component.literal(piece.text())
-                .withStyle(fontStyle(Style.EMPTY.withColor(color & 0xFFFFFF).withBold(config.lyricsBold),
-                        config.lyricsFont));
+                .withStyle(LyricsFont.of(config.lyricsFont)
+                        .apply(Style.EMPTY.withColor(color & 0xFFFFFF).withBold(config.lyricsBold)));
         int textPixels = Minecraft.getInstance().font.width(text) + 1;
 
         float size = (float) (Math.max(0.1f, config.lyricsTextSize / 100.0f) * (1.0 - 0.45 * crowd));
@@ -498,11 +483,13 @@ public final class WorldLyrics {
         float pitch = (float) Math.max(-89.0, Math.min(89.0,
                 facing + (config.lyricsTilt ? (random.nextDouble() * 2.0 - 1.0) * MAX_LEAN_DEGREES : 0.0)));
         Display.TextDisplay front = display(spot, yaw, pitch, spot.roll(), text);
-        applyTransform(front, spot.scale(), spot.textHalfHeight(), pitch, spot.roll(), 1.0f, 0.0f);
+        applyTransform(front, spot.scale(), spot.textHalfHeight(), pitch, spot.roll(), LyricsAnimation.Pose.REST,
+                false);
         // Text is only drawn on its front side. A twin turned the other way makes the words
         // visible from behind as well. Its tilt is mirrored so both lie in the same plane.
         Display.TextDisplay back = display(spot, yaw + 180.0f, -pitch, -spot.roll(), text);
-        applyTransform(back, spot.scale(), spot.textHalfHeight(), -pitch, -spot.roll(), 1.0f, 0.0f);
+        applyTransform(back, spot.scale(), spot.textHalfHeight(), -pitch, -spot.roll(), LyricsAnimation.Pose.REST,
+                true);
         level.addEntity(front);
         level.addEntity(back);
 
@@ -541,28 +528,27 @@ public final class WorldLyrics {
      * Sets the size, the tilt and the position of a piece's text. The text is tipped up or down
      * and tilted a little to the side, both around its middle. A text display turns around its
      * position, which is the bottom of the text, so the shift moves the middle back to where it
-     * was and the piece stays where the overlap check put it. {@code mul} scales the text around
-     * its middle and {@code lift} moves it up, in blocks, for the appear and disappear movements.
+     * was and the piece stays where the overlap check put it. The pose adds the movement of the
+     * appear and disappear animation on top: it scales and turns the text around its middle and
+     * moves it up and to the side, in heights of the text.
+     *
+     * <p>The twin that faces the other way has its own left and its own front, so the sideways
+     * move and the spin run the other way there to cover the same space. Turning around the
+     * vertical axis is the same for both.</p>
      */
     private static void applyTransform(Display.TextDisplay display, float scale, double textHalf, float pitchDegrees,
-                                       float roll, float mul, float lift) {
+                                       float roll, LyricsAnimation.Pose pose, boolean back) {
         float half = (float) textHalf;
-        Quaternionf turn = new Quaternionf().rotationX((float) Math.toRadians(pitchDegrees)).rotateZ(roll);
-        Vector3f scaledMiddle = new Vector3f(0.0f, half * mul, 0.0f);
-        Vector3f shift = new Vector3f(0.0f, half + lift, 0.0f).sub(turn.transform(scaledMiddle));
-        float size = scale * mul;
+        float line = half * 2.0f;
+        float spin = back ? -pose.spin() : pose.spin();
+        float slide = (back ? -pose.slide() : pose.slide()) * line;
+        Quaternionf turn = new Quaternionf().rotationX((float) Math.toRadians(pitchDegrees))
+                .rotateZ(roll + spin).rotateY(pose.flip());
+        Vector3f scaledMiddle = new Vector3f(0.0f, half * pose.scale(), 0.0f);
+        Vector3f shift = new Vector3f(slide, half + pose.lift() * line, 0.0f).sub(turn.transform(scaledMiddle));
+        float size = scale * pose.scale();
         ((DisplayAccess) display).spotifycontrol$setTransformation(Platform.transformation(shift, turn,
                 new Vector3f(size, size, size)));
-    }
-
-    private static Style fontStyle(Style style, String font) {
-        String path = switch (font) {
-            case "UNIFONT" -> "uniform";
-            case "GALACTIC" -> "alt";
-            case "ILLAGER" -> "illageralt";
-            default -> null;
-        };
-        return path == null ? style : Platform.withFont(style, "minecraft", path);
     }
 
     /**

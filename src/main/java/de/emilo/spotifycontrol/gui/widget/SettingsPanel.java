@@ -8,6 +8,9 @@ import de.emilo.spotifycontrol.config.ConfigManager;
 import de.emilo.spotifycontrol.config.Lang;
 import de.emilo.spotifycontrol.gui.Anim;
 import de.emilo.spotifycontrol.gui.Theme;
+import de.emilo.spotifycontrol.config.ClientConfig;
+import de.emilo.spotifycontrol.lyrics.LyricsAnimation;
+import de.emilo.spotifycontrol.lyrics.LyricsFont;
 import de.emilo.spotifycontrol.spotify.SpotifyAuth;
 import de.emilo.spotifycontrol.spotify.SpotifySession;
 import de.emilo.spotifycontrol.spotify.model.Device;
@@ -17,6 +20,7 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.Style;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
@@ -52,8 +56,15 @@ public class SettingsPanel {
     private static final String[] MODIFIERS = {"CONTROL", "SHIFT", "ALT", "NONE"};
     private static final String[] START_VIEWS = {"HOME", "SEARCH", "LIBRARY", "LIKED"};
     private static final String[] KEEP_MODES = {"LINE", "COUNT", "SECONDS"};
-    private static final String[] LYRICS_FONTS = {"DEFAULT", "UNIFONT", "GALACTIC", "ILLAGER"};
-    private static final String[] LYRICS_ANIMATIONS = {"FADE", "GROW", "RISE"};
+
+    /** A list of choices takes this many ordinary rows, so the rows around it keep their rhythm. */
+    private static final int PICKER_SPAN = 5;
+    private static final int CHIP_HEIGHT = 17;
+
+    /** The wiki page that explains how to create the Spotify app and where its client ID is. */
+    private static final String HELP_URL =
+            "https://github.com/EmilDeuOfficial/SpotifyControl/wiki/Installation#creating-the-spotify-app";
+    private static final String HELP_LABEL = "? Help";
 
     private interface Row {
         String label();
@@ -63,6 +74,26 @@ public class SettingsPanel {
     }
 
     private record CycleRow(String label, Supplier<String> get, Runnable next) implements Row {
+    }
+
+    /** What a list of choices lets the user pick. */
+    private enum PickerKind {
+        IN_ANIMATION, OUT_ANIMATION, FONT
+    }
+
+    /**
+     * A list of choices with a preview. It is drawn over the {@link #PICKER_SPAN} rows it takes,
+     * the first of which is this one and the rest {@link PickerFiller}s that only redirect clicks.
+     */
+    private record PickerRow(String label, PickerKind kind, Supplier<String> get, Consumer<String> set)
+            implements Row {
+    }
+
+    private record PickerFiller(int slot) implements Row {
+        @Override
+        public String label() {
+            return "";
+        }
     }
 
     private record SliderRow(String label, IntSupplier get, IntConsumer set, int min, int max, int step,
@@ -345,11 +376,11 @@ public class SettingsPanel {
                     ConfigManager.client().lyricsTextSize = value;
                     ConfigManager.saveClient();
                 }, 25, 300, 5, "%"));
-        rows.add(new CycleRow("Lyrics font", () -> fontLabel(ConfigManager.client().lyricsFont),
-                () -> {
-                    ConfigManager.client().lyricsFont = cycle(LYRICS_FONTS, ConfigManager.client().lyricsFont);
+        addPicker("Lyrics font", PickerKind.FONT, () -> ConfigManager.client().lyricsFont,
+                value -> {
+                    ConfigManager.client().lyricsFont = value;
                     ConfigManager.saveClient();
-                }));
+                });
         rows.add(new ToggleRow("Bold text", () -> ConfigManager.client().lyricsBold,
                 value -> {
                     ConfigManager.client().lyricsBold = value;
@@ -360,21 +391,21 @@ public class SettingsPanel {
                     ConfigManager.client().lyricsFadeInMillis = value;
                     ConfigManager.saveClient();
                 }, 0, 2000, 50, " ms"));
-        rows.add(new CycleRow("Fade in style", () -> animationLabel(ConfigManager.client().lyricsInStyle),
-                () -> {
-                    ConfigManager.client().lyricsInStyle = cycle(LYRICS_ANIMATIONS, ConfigManager.client().lyricsInStyle);
+        addPicker("Fade in animation", PickerKind.IN_ANIMATION, () -> ConfigManager.client().lyricsInStyle,
+                value -> {
+                    ConfigManager.client().lyricsInStyle = value;
                     ConfigManager.saveClient();
-                }));
+                });
         rows.add(new SliderRow("Fade out time", () -> ConfigManager.client().lyricsFadeOutMillis,
                 value -> {
                     ConfigManager.client().lyricsFadeOutMillis = value;
                     ConfigManager.saveClient();
                 }, 0, 4000, 100, " ms"));
-        rows.add(new CycleRow("Fade out style", () -> animationLabel(ConfigManager.client().lyricsOutStyle),
-                () -> {
-                    ConfigManager.client().lyricsOutStyle = cycle(LYRICS_ANIMATIONS, ConfigManager.client().lyricsOutStyle);
+        addPicker("Fade out animation", PickerKind.OUT_ANIMATION, () -> ConfigManager.client().lyricsOutStyle,
+                value -> {
+                    ConfigManager.client().lyricsOutStyle = value;
                     ConfigManager.saveClient();
-                }));
+                });
         rows.add(new CycleRow("Fade out trigger", () -> keepModeLabel(ConfigManager.client().lyricsKeepMode),
                 () -> {
                     ConfigManager.client().lyricsKeepMode = cycle(KEEP_MODES, ConfigManager.client().lyricsKeepMode);
@@ -446,7 +477,7 @@ public class SettingsPanel {
 
     private void ensureBoxes(int x, int y, int width) {
         Font font = Minecraft.getInstance().font;
-        int boxWidth = Math.max(40, Math.min(260, width - 140));
+        int boxWidth = Math.max(40, Math.min(260, width - 196));
         if (clientIdBox == null) {
             clientIdBox = new EditBox(font, x + 120, y, boxWidth, 16, Component.literal("client id"));
             clientIdBox.setMaxLength(64);
@@ -527,10 +558,22 @@ public class SettingsPanel {
 
         boxesY = y + (guide ? BOXES_OFFSET : BOXES_OFFSET_COMPACT);
         ensureBoxes(x, boxesY + 8, width);
-        Theme.rounded(graphics, x + 114, boxesY, Math.max(48, Math.min(268, width - 134)), 24, 4,
+        Theme.rounded(graphics, x + 114, boxesY, clientBoxWidth(width), 24, 4,
                 Anim.mix(Theme.ELEVATED, Theme.SURFACE_HOVER, focusLift("set.box:0", clientIdBox.isFocused())));
         Platform.drawString(graphics, font, "Client ID", x, boxesY + 8, Theme.TEXT_MUTED, false);
         clientIdBox.render(graphics, mouseX, mouseY, partialTick);
+
+        // Straight beside the field the client ID goes into, so whoever does not know where to get
+        // one is one click away from the page that explains it.
+        int helpWidth = font.width(HELP_LABEL) + 16;
+        int helpX = helpButtonX(x, width);
+        boolean helpHovered = Theme.hovered(mouseX, mouseY, helpX, boxesY + 3, helpWidth, 18);
+        float helpGlow = Anim.hover("set.help", helpHovered);
+        int helpInset = Anim.pressInset("set.help.press", 1);
+        Theme.rounded(graphics, helpX + helpInset, boxesY + 3 + helpInset, helpWidth - 2 * helpInset,
+                18 - 2 * helpInset, 9, Anim.mix(Theme.ELEVATED, Theme.GREEN, helpGlow));
+        Platform.drawString(graphics, font, HELP_LABEL, helpX + 8, boxesY + 8,
+                Anim.mix(Theme.TEXT, Theme.BLACK, helpGlow), false);
 
         Theme.rounded(graphics, x + 114, boxesY + 26, 68, 24, 4,
                 Anim.mix(Theme.ELEVATED, Theme.SURFACE_HOVER, focusLift("set.box:1", portBox.isFocused())));
@@ -549,10 +592,12 @@ public class SettingsPanel {
         int offset = scroll.offset();
         for (int index = 0; index < rows.size(); index++) {
             int rowY = rowsY + index * ROW_HEIGHT - offset;
-            if (rowY + ROW_HEIGHT < rowsY || rowY > rowsY + viewHeight) {
+            Row current = rows.get(index);
+            int span = current instanceof PickerRow ? PICKER_SPAN : 1;
+            if (current instanceof PickerFiller || rowY + span * ROW_HEIGHT < rowsY || rowY > rowsY + viewHeight) {
                 continue;
             }
-            renderRow(graphics, font, rows.get(index), index, x, rowY, width, mouseX, mouseY);
+            renderRow(graphics, font, current, index, x, rowY, width, mouseX, mouseY);
         }
         Theme.endScissor(graphics);
         scroll.renderScrollbar(graphics, x + width - 4, rowsY, viewHeight);
@@ -560,6 +605,10 @@ public class SettingsPanel {
 
     private void renderRow(GuiGraphics graphics, Font font, Row row, int index, int x, int y, int width, int mouseX,
                            int mouseY) {
+        if (row instanceof PickerRow picker) {
+            renderPicker(graphics, font, picker, index, x, y, width, mouseX, mouseY);
+            return;
+        }
         if (row instanceof HeaderRow header) {
             String label = header.label().toUpperCase(java.util.Locale.ROOT);
             Platform.drawString(graphics, font, label, x + 4, y + 12, Theme.GREEN, false);
@@ -651,13 +700,182 @@ public class SettingsPanel {
         }
     }
 
+    private void addPicker(String label, PickerKind kind, Supplier<String> get, Consumer<String> set) {
+        rows.add(new PickerRow(label, kind, get, set));
+        for (int slot = 1; slot < PICKER_SPAN; slot++) {
+            rows.add(new PickerFiller(slot));
+        }
+    }
+
+    private static String[] pickerKeys(PickerKind kind) {
+        if (kind == PickerKind.FONT) {
+            LyricsFont[] fonts = LyricsFont.values();
+            String[] keys = new String[fonts.length];
+            for (int i = 0; i < fonts.length; i++) {
+                keys[i] = fonts[i].name();
+            }
+            return keys;
+        }
+        LyricsAnimation[] animations = LyricsAnimation.values();
+        String[] keys = new String[animations.length];
+        for (int i = 0; i < animations.length; i++) {
+            keys[i] = animations[i].name();
+        }
+        return keys;
+    }
+
+    /** The name of a choice. A font is written in the font it stands for, so the list is a preview too. */
+    private static Component chipText(PickerKind kind, String key) {
+        if (kind == PickerKind.FONT) {
+            LyricsFont font = LyricsFont.of(key);
+            return Component.literal(font.label()).withStyle(font.apply(Style.EMPTY));
+        }
+        return Component.literal(LyricsAnimation.of(key).label());
+    }
+
+    private static int previewWidth(int width) {
+        return width >= 380 ? 132 : 0;
+    }
+
+    /** Where the choices sit inside the block of a list, as x, y, width and height. They wrap to the next line. */
+    private static int[][] chipRects(Font font, PickerKind kind, int x, int y, int width) {
+        String[] keys = pickerKeys(kind);
+        int preview = previewWidth(width);
+        int left = x + 10;
+        int right = x + width - 20 - (preview > 0 ? preview + 8 : 0);
+        int cx = left;
+        int cy = y + 24;
+        int[][] rects = new int[keys.length][];
+        for (int i = 0; i < keys.length; i++) {
+            int w = font.width(chipText(kind, keys[i])) + 14;
+            if (cx + w > right && cx > left) {
+                cx = left;
+                cy += CHIP_HEIGHT + 4;
+            }
+            rects[i] = new int[] {cx, cy, w, CHIP_HEIGHT};
+            cx += w + 4;
+        }
+        return rects;
+    }
+
+    private void renderPicker(GuiGraphics graphics, Font font, PickerRow picker, int index, int x, int y, int width,
+                              int mouseX, int mouseY) {
+        int blockHeight = PICKER_SPAN * ROW_HEIGHT - 6;
+        Theme.rounded(graphics, x + 4, y + 2, width - 14, blockHeight, 6, Theme.alpha(Theme.SURFACE_HOVER, 0.55f));
+        Platform.drawString(graphics, font, picker.label(), x + 10, y + 8, Theme.TEXT, false);
+
+        PickerKind kind = picker.kind();
+        String selected = picker.get().get();
+        String[] keys = pickerKeys(kind);
+        int[][] rects = chipRects(font, kind, x, y, width);
+        boolean reachable = mouseY >= rowsY && !scroll.claims(mouseX, mouseY);
+        String hoveredKey = null;
+        for (int i = 0; i < keys.length; i++) {
+            int[] r = rects[i];
+            boolean over = reachable && Theme.hovered(mouseX, mouseY, r[0], r[1], r[2], r[3]);
+            if (over) {
+                hoveredKey = keys[i];
+            }
+            boolean on = keys[i].equalsIgnoreCase(selected);
+            float glow = Anim.hover("set.chip:" + index + ":" + i, over);
+            int fill = on ? Theme.GREEN : Anim.mix(Theme.ELEVATED, Theme.SURFACE_HOVER, glow);
+            Theme.rounded(graphics, r[0], r[1], r[2], r[3], 8, fill);
+            Platform.drawText(graphics, font, chipText(kind, keys[i]), r[0] + 7, r[1] + (CHIP_HEIGHT - 8) / 2,
+                    on ? Theme.BLACK : Anim.mix(Theme.TEXT_MUTED, Theme.TEXT, glow), false);
+        }
+
+        int preview = previewWidth(width);
+        if (preview > 0) {
+            renderPreview(graphics, font, kind, hoveredKey != null ? hoveredKey : selected,
+                    x + width - 20 - preview, y + 24, preview, blockHeight - 28);
+        }
+    }
+
+    /**
+     * Shows a word the way the world will show it: for an animation it appears, stays and goes
+     * on a loop, with the fade times from the settings and the choice that is under the cursor in
+     * place of the saved one; for a font it is a sample in that font.
+     */
+    private static void renderPreview(GuiGraphics graphics, Font font, PickerKind kind, String key, int px, int py,
+                                      int w, int h) {
+        ClientConfig config = ConfigManager.client();
+        Theme.rounded(graphics, px, py, w, h, 6, Theme.alpha(Theme.BLACK, 0.45f));
+
+        LyricsAnimation in = LyricsAnimation.of(config.lyricsInStyle);
+        LyricsAnimation out = LyricsAnimation.of(config.lyricsOutStyle);
+        LyricsFont chosen = LyricsFont.of(config.lyricsFont);
+        if (kind == PickerKind.IN_ANIMATION) {
+            in = LyricsAnimation.of(key);
+        } else if (kind == PickerKind.OUT_ANIMATION) {
+            out = LyricsAnimation.of(key);
+        } else {
+            chosen = LyricsFont.of(key);
+        }
+        Component word = Component.literal(kind == PickerKind.FONT ? "Sing along" : "Lyrics")
+                .withStyle(chosen.apply(Style.EMPTY.withBold(config.lyricsBold)));
+
+        float hidden = 0.0f;
+        LyricsAnimation.Pose pose = LyricsAnimation.Pose.REST;
+        if (kind != PickerKind.FONT) {
+            // Never shorter than a third of a second, so even a time of 0 can be seen to do something.
+            int inMs = Math.max(350, config.lyricsFadeInMillis);
+            int outMs = Math.max(350, config.lyricsFadeOutMillis);
+            int hold = 900;
+            int gap = 450;
+            long t = System.currentTimeMillis() % (inMs + hold + outMs + gap);
+            if (t < inMs) {
+                hidden = 1.0f - LyricsAnimation.ease((float) t / inMs);
+                pose = in.pose(false, hidden);
+            } else if (t >= inMs + hold) {
+                hidden = t < inMs + hold + outMs ? LyricsAnimation.ease((float) (t - inMs - hold) / outMs) : 1.0f;
+                pose = out.pose(true, hidden);
+            }
+        }
+        float alpha = 1.0f - hidden;
+        if (alpha < 0.06f) {
+            return;
+        }
+        int textWidth = Math.max(1, font.width(word));
+        float scale = Math.min(kind == PickerKind.FONT ? 1.6f : 2.2f, (w - 12.0f) / textWidth);
+        float lineHeight = 8.0f * scale;
+        float flip = Math.max(0.03f, (float) Math.abs(Math.cos(pose.flip())));
+        Theme.scissor(graphics, px, py, px + w, py + h);
+        Platform.pushTransform(graphics, px + w / 2.0f + pose.slide() * lineHeight,
+                py + h / 2.0f - pose.lift() * lineHeight, pose.spin(),
+                scale * pose.scale() * flip, scale * pose.scale());
+        Platform.drawText(graphics, font, word, -textWidth / 2, -4, Theme.alpha(Theme.accent(), alpha), true);
+        Platform.popMatrix(graphics);
+        Theme.endScissor(graphics);
+    }
+
+    private void clickPicker(PickerRow picker, int index, int mouseX, int mouseY) {
+        int rowTop = rowsY + index * ROW_HEIGHT - scroll.offset();
+        Font font = Minecraft.getInstance().font;
+        String[] keys = pickerKeys(picker.kind());
+        int[][] rects = chipRects(font, picker.kind(), panelX, rowTop, panelWidth);
+        for (int i = 0; i < keys.length; i++) {
+            int[] r = rects[i];
+            if (Theme.hovered(mouseX, mouseY, r[0], r[1], r[2], r[3])) {
+                Anim.click("set.chip:" + index + ":" + i);
+                picker.set().accept(keys[i]);
+                return;
+            }
+        }
+    }
+
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         if (!Theme.hovered((int) mouseX, (int) mouseY, panelX, panelY, panelWidth, panelHeight)) {
             unfocusBoxes();
             return false;
         }
+        if (Theme.hovered((int) mouseX, (int) mouseY, helpButtonX(panelX, panelWidth), boxesY + 3,
+                Minecraft.getInstance().font.width(HELP_LABEL) + 16, 18)) {
+            Anim.click("set.help.press");
+            Platform.openUri(HELP_URL);
+            return true;
+        }
         if (clientIdBox != null && Theme.hovered((int) mouseX, (int) mouseY,
-                panelX + 114, boxesY, Math.max(48, Math.min(268, panelWidth - 134)), 24)) {
+                panelX + 114, boxesY, clientBoxWidth(panelWidth), 24)) {
             focusBox(clientIdBox, portBox, mouseX, button);
             return true;
         }
@@ -682,6 +900,14 @@ public class SettingsPanel {
             return true;
         }
         Row row = rows.get(index);
+        if (row instanceof PickerFiller filler) {
+            index -= filler.slot();
+            row = rows.get(index);
+        }
+        if (row instanceof PickerRow picker) {
+            clickPicker(picker, index, (int) mouseX, (int) mouseY);
+            return true;
+        }
         if (row instanceof HeaderRow) {
             return true;
         }
@@ -766,6 +992,15 @@ public class SettingsPanel {
       */
     private static float focusLift(String id, boolean focused) {
         return Anim.enabled() ? Anim.to(id, focused ? 1.0f : 0.0f, Anim.HOVER) : 0.0f;
+    }
+
+    /** Width of the client ID field, which leaves room for the help button after it. */
+    private static int clientBoxWidth(int width) {
+        return Math.max(48, Math.min(268, width - 190));
+    }
+
+    private static int helpButtonX(int x, int width) {
+        return x + 114 + clientBoxWidth(width) + 8;
     }
 
     private static int controlX(int x, int width) {
@@ -887,23 +1122,6 @@ public class SettingsPanel {
 
     private static String overlayScaleLabel(int value) {
         return value <= 0 ? "Same as game" : value + "x";
-    }
-
-    private static String fontLabel(String font) {
-        return switch (font) {
-            case "UNIFONT" -> "Unifont";
-            case "GALACTIC" -> "Galactic (enchanting table)";
-            case "ILLAGER" -> "Illager runes";
-            default -> "Default";
-        };
-    }
-
-    private static String animationLabel(String style) {
-        return switch (style) {
-            case "GROW" -> "Fade and grow";
-            case "RISE" -> "Fade and rise";
-            default -> "Fade";
-        };
     }
 
     private static String keepModeLabel(String mode) {

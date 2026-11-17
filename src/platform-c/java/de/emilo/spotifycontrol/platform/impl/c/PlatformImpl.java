@@ -210,4 +210,18 @@ public final class PlatformImpl implements PlatformApi {
                                                      String path) {
         return style.withFont(ResourceLocation.fromNamespaceAndPath(namespace, path));
     }
+
+    @Override
+    public void pushTransform(GuiGraphics graphics, float translateX, float translateY, float rotation, float scaleX,
+                              float scaleY) {
+        graphics.pose().pushPose();
+        graphics.pose().translate(translateX, translateY, 0.0f);
+        graphics.pose().mulPose(com.mojang.math.Axis.ZP.rotation(rotation));
+        graphics.pose().scale(scaleX, scaleY, 1.0f);
+    }
+
+    @Override
+    public void drawText(GuiGraphics graphics, Font font, Component text, int x, int y, int color, boolean shadow) {
+        graphics.drawString(font, text, x, y, color, shadow);
+    }
 }
