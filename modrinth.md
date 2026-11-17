@@ -5,6 +5,15 @@
   <img src="https://raw.githubusercontent.com/EmilDeuOfficial/SpotifyControl/main/img/title_transparent.png" alt="SpotifyControl">
 </p>
 
+> ## Spotify Premium is needed
+>
+> **Without Spotify Premium most features do not work.** Spotify only lets Premium accounts create the app
+> the mod logs in with, and play, pause, skip, seek, volume, shuffle, repeat, starting songs and moving
+> playback between devices need Premium on the logged in account. Without it you can only browse your
+> library, search and see what is playing. A friend without Premium can use your app if you add their
+> account under User Management on the Spotify developer dashboard, and can still listen to a listening
+> party in broadcast mode. Details in the setup section.
+
 A Fabric mod that puts a Spotify client into Minecraft. Press Ctrl + M to open a full overlay in the
 Spotify colour theme, log in with your own Spotify account, browse your library, search, manage
 playlists and control playback without leaving the game. A listening party feature lets other players
