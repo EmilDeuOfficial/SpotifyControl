@@ -52,6 +52,8 @@ public class SettingsPanel {
     private static final String[] MODIFIERS = {"CONTROL", "SHIFT", "ALT", "NONE"};
     private static final String[] START_VIEWS = {"HOME", "SEARCH", "LIBRARY", "LIKED"};
     private static final String[] KEEP_MODES = {"LINE", "COUNT", "SECONDS"};
+    private static final String[] LYRICS_FONTS = {"DEFAULT", "UNIFONT", "GALACTIC", "ILLAGER"};
+    private static final String[] LYRICS_ANIMATIONS = {"FADE", "GROW", "RISE"};
 
     private interface Row {
         String label();
@@ -343,7 +345,37 @@ public class SettingsPanel {
                     ConfigManager.client().lyricsTextSize = value;
                     ConfigManager.saveClient();
                 }, 25, 300, 5, "%"));
-        rows.add(new CycleRow("Lyrics fade out", () -> keepModeLabel(ConfigManager.client().lyricsKeepMode),
+        rows.add(new CycleRow("Lyrics font", () -> fontLabel(ConfigManager.client().lyricsFont),
+                () -> {
+                    ConfigManager.client().lyricsFont = cycle(LYRICS_FONTS, ConfigManager.client().lyricsFont);
+                    ConfigManager.saveClient();
+                }));
+        rows.add(new ToggleRow("Bold text", () -> ConfigManager.client().lyricsBold,
+                value -> {
+                    ConfigManager.client().lyricsBold = value;
+                    ConfigManager.saveClient();
+                }));
+        rows.add(new SliderRow("Fade in time", () -> ConfigManager.client().lyricsFadeInMillis,
+                value -> {
+                    ConfigManager.client().lyricsFadeInMillis = value;
+                    ConfigManager.saveClient();
+                }, 0, 2000, 50, " ms"));
+        rows.add(new CycleRow("Fade in style", () -> animationLabel(ConfigManager.client().lyricsInStyle),
+                () -> {
+                    ConfigManager.client().lyricsInStyle = cycle(LYRICS_ANIMATIONS, ConfigManager.client().lyricsInStyle);
+                    ConfigManager.saveClient();
+                }));
+        rows.add(new SliderRow("Fade out time", () -> ConfigManager.client().lyricsFadeOutMillis,
+                value -> {
+                    ConfigManager.client().lyricsFadeOutMillis = value;
+                    ConfigManager.saveClient();
+                }, 0, 4000, 100, " ms"));
+        rows.add(new CycleRow("Fade out style", () -> animationLabel(ConfigManager.client().lyricsOutStyle),
+                () -> {
+                    ConfigManager.client().lyricsOutStyle = cycle(LYRICS_ANIMATIONS, ConfigManager.client().lyricsOutStyle);
+                    ConfigManager.saveClient();
+                }));
+        rows.add(new CycleRow("Fade out trigger", () -> keepModeLabel(ConfigManager.client().lyricsKeepMode),
                 () -> {
                     ConfigManager.client().lyricsKeepMode = cycle(KEEP_MODES, ConfigManager.client().lyricsKeepMode);
                     ConfigManager.saveClient();
@@ -855,6 +887,23 @@ public class SettingsPanel {
 
     private static String overlayScaleLabel(int value) {
         return value <= 0 ? "Same as game" : value + "x";
+    }
+
+    private static String fontLabel(String font) {
+        return switch (font) {
+            case "UNIFONT" -> "Unifont";
+            case "GALACTIC" -> "Galactic (enchanting table)";
+            case "ILLAGER" -> "Illager runes";
+            default -> "Default";
+        };
+    }
+
+    private static String animationLabel(String style) {
+        return switch (style) {
+            case "GROW" -> "Fade and grow";
+            case "RISE" -> "Fade and rise";
+            default -> "Fade";
+        };
     }
 
     private static String keepModeLabel(String mode) {

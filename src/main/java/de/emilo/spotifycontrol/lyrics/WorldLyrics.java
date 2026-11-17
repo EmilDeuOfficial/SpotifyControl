@@ -65,8 +65,6 @@ public final class WorldLyrics {
     private static final double MAX_LIFT = 6.0;
     /** Bit of the text display style flags that draws a drop shadow. */
     private static final byte FLAG_SHADOW = 1;
-    private static final int FADE_IN_TICKS = 5;
-    private static final int FADE_OUT_TICKS = 20;
     /** Ticks left in the fade when a piece has to make room because another one now covers it. */
     private static final int QUICK_FADE_TICKS = 4;
     /** Free space kept around every piece as seen from the player, as a share of the distance. */
@@ -110,11 +108,24 @@ public final class WorldLyrics {
         final double halfWidth;
         final double halfHeight;
         final long endMs;
+        final float scale;
+        final float pitch;
+        final float roll;
+        final double textHalf;
+        /** The size factor and the lift last applied, so a transformation is only sent when it moved. */
+        float lastMul = 1.0f;
+        float lastLift = 0.0f;
         int age;
         /** Ticks into the fade out, or -1 while the piece is still on. */
         int fading = -1;
 
-        Placed(Display.TextDisplay front, Display.TextDisplay back, BlockPos pos, Box box, long endMs) {
+        Placed(Display.TextDisplay front, Display.TextDisplay back, BlockPos pos, Spot spot, float pitch,
+               long endMs) {
+            Box box = spot.box();
+            this.scale = spot.scale();
+            this.pitch = pitch;
+            this.roll = spot.roll();
+            this.textHalf = spot.textHalfHeight();
             this.front = front;
             this.back = back;
             this.pos = pos;
@@ -256,16 +267,17 @@ public final class WorldLyrics {
      * tick the older one of any two that touch is faded out quickly.
      */
     private static void separate(View view) {
+        int quick = Math.max(0, outTicks(ConfigManager.client()) - QUICK_FADE_TICKS);
         for (int i = 0; i < placed.size(); i++) {
             Placed older = placed.get(i);
-            if (older.fading >= FADE_OUT_TICKS - QUICK_FADE_TICKS) {
+            if (older.fading >= quick) {
                 continue;
             }
             for (int j = i + 1; j < placed.size(); j++) {
                 Placed newer = placed.get(j);
                 if (overlaps(view, older.center, older.halfWidth, older.halfHeight,
                         newer.center, newer.halfWidth, newer.halfHeight)) {
-                    older.fading = FADE_OUT_TICKS - QUICK_FADE_TICKS;
+                    older.fading = quick;
                     break;
                 }
             }
@@ -329,35 +341,71 @@ public final class WorldLyrics {
         }
     }
 
+    private static int inTicks(ClientConfig config) {
+        return Math.max(0, config.lyricsFadeInMillis / 50);
+    }
+
+    private static int outTicks(ClientConfig config) {
+        return Math.max(0, config.lyricsFadeOutMillis / 50);
+    }
+
     private static void animate(View view, long progress) {
+        ClientConfig config = ConfigManager.client();
         separate(view);
-        expire(ConfigManager.client(), progress);
+        expire(config, progress);
+        int in = inTicks(config);
+        int out = outTicks(config);
         Iterator<Placed> it = placed.iterator();
         while (it.hasNext()) {
             Placed piece = it.next();
             piece.age++;
             int alpha;
+            float mul = 1.0f;
+            float lift = 0.0f;
+            float lineHeight = (float) (piece.textHalf * 2.0);
             if (piece.fading >= 0) {
                 piece.fading++;
-                if (piece.fading >= FADE_OUT_TICKS) {
+                if (piece.fading >= out) {
                     discard(piece);
                     it.remove();
                     continue;
                 }
-                alpha = lerpAlpha(1.0f - (float) piece.fading / FADE_OUT_TICKS);
-            } else if (piece.age <= FADE_IN_TICKS) {
-                alpha = lerpAlpha((float) piece.age / FADE_IN_TICKS);
+                float t = ease((float) piece.fading / out);
+                alpha = alphaOf(1.0f - t);
+                if ("GROW".equals(config.lyricsOutStyle)) {
+                    mul = 1.0f - 0.5f * t;
+                } else if ("RISE".equals(config.lyricsOutStyle)) {
+                    lift = lineHeight * t;
+                }
+            } else if (piece.age < in) {
+                float t = ease((float) piece.age / in);
+                alpha = alphaOf(t);
+                if ("GROW".equals(config.lyricsInStyle)) {
+                    mul = 0.5f + 0.5f * t;
+                } else if ("RISE".equals(config.lyricsInStyle)) {
+                    lift = -lineHeight * (1.0f - t);
+                }
             } else {
                 alpha = 255;
             }
             ((TextDisplayAccess) piece.front).spotifycontrol$setTextOpacity((byte) alpha);
             ((TextDisplayAccess) piece.back).spotifycontrol$setTextOpacity((byte) alpha);
+            if (mul != piece.lastMul || lift != piece.lastLift) {
+                piece.lastMul = mul;
+                piece.lastLift = lift;
+                applyTransform(piece.front, piece.scale, piece.textHalf, piece.pitch, piece.roll, mul, lift);
+                applyTransform(piece.back, piece.scale, piece.textHalf, -piece.pitch, -piece.roll, mul, lift);
+            }
         }
     }
 
-    private static int lerpAlpha(float t) {
-        float eased = t * t * (3.0f - 2.0f * t);
-        return Math.round(MIN_ALPHA + (255 - MIN_ALPHA) * Math.max(0.0f, Math.min(1.0f, eased)));
+    private static float ease(float t) {
+        float clamped = Math.max(0.0f, Math.min(1.0f, t));
+        return clamped * clamped * (3.0f - 2.0f * clamped);
+    }
+
+    private static int alphaOf(float t) {
+        return Math.round(MIN_ALPHA + (255 - MIN_ALPHA) * Math.max(0.0f, Math.min(1.0f, t)));
     }
 
     private static void request(Track track, int wordsPerPiece) {
@@ -428,7 +476,8 @@ public final class WorldLyrics {
         int accent = Theme.accent();
         int color = spawnCount++ % 2 == 0 ? accent : Theme.mix(accent, 0xFFFFFFFF, 0.45f);
         Component text = Component.literal(piece.text())
-                .withStyle(Style.EMPTY.withColor(color & 0xFFFFFF).withBold(true));
+                .withStyle(fontStyle(Style.EMPTY.withColor(color & 0xFFFFFF).withBold(config.lyricsBold),
+                        config.lyricsFont));
         int textPixels = Minecraft.getInstance().font.width(text) + 1;
 
         float size = (float) (Math.max(0.1f, config.lyricsTextSize / 100.0f) * (1.0 - 0.45 * crowd));
@@ -449,13 +498,15 @@ public final class WorldLyrics {
         float pitch = (float) Math.max(-89.0, Math.min(89.0,
                 facing + (config.lyricsTilt ? (random.nextDouble() * 2.0 - 1.0) * MAX_LEAN_DEGREES : 0.0)));
         Display.TextDisplay front = display(spot, yaw, pitch, spot.roll(), text);
+        applyTransform(front, spot.scale(), spot.textHalfHeight(), pitch, spot.roll(), 1.0f, 0.0f);
         // Text is only drawn on its front side. A twin turned the other way makes the words
         // visible from behind as well. Its tilt is mirrored so both lie in the same plane.
         Display.TextDisplay back = display(spot, yaw + 180.0f, -pitch, -spot.roll(), text);
+        applyTransform(back, spot.scale(), spot.textHalfHeight(), -pitch, -spot.roll(), 1.0f, 0.0f);
         level.addEntity(front);
         level.addEntity(back);
 
-        placed.add(new Placed(front, back, pos, spot.box(), piece.endMs()));
+        placed.add(new Placed(front, back, pos, spot, pitch, piece.endMs()));
         occupied.add(pos);
         // The kept count fades pieces out gently in expire(). This is only the hard ceiling for
         // the seconds mode with a long time and a fast song.
@@ -483,17 +534,35 @@ public final class WorldLyrics {
         access.spotifycontrol$setBillboard(Display.BillboardConstraints.FIXED);
         access.spotifycontrol$setBrightness(new Brightness(15, 15));
         access.spotifycontrol$setViewRange(4.0f);
-        float scale = spot.scale();
-        // The text is tipped up or down and tilted a little to the side, both around its middle.
-        // A text display turns around its position, which is the bottom of the text, so the shift
-        // moves the middle back to where it was and the piece stays where the overlap check put it.
-        float half = (float) spot.textHalfHeight();
-        Quaternionf turn = new Quaternionf().rotationX((float) Math.toRadians(pitch)).rotateZ(roll);
-        Vector3f middle = new Vector3f(0.0f, half, 0.0f);
-        Vector3f shift = new Vector3f(middle).sub(turn.transform(new Vector3f(middle)));
-        access.spotifycontrol$setTransformation(Platform.transformation(shift, turn,
-                new Vector3f(scale, scale, scale)));
         return display;
+    }
+
+    /**
+     * Sets the size, the tilt and the position of a piece's text. The text is tipped up or down
+     * and tilted a little to the side, both around its middle. A text display turns around its
+     * position, which is the bottom of the text, so the shift moves the middle back to where it
+     * was and the piece stays where the overlap check put it. {@code mul} scales the text around
+     * its middle and {@code lift} moves it up, in blocks, for the appear and disappear movements.
+     */
+    private static void applyTransform(Display.TextDisplay display, float scale, double textHalf, float pitchDegrees,
+                                       float roll, float mul, float lift) {
+        float half = (float) textHalf;
+        Quaternionf turn = new Quaternionf().rotationX((float) Math.toRadians(pitchDegrees)).rotateZ(roll);
+        Vector3f scaledMiddle = new Vector3f(0.0f, half * mul, 0.0f);
+        Vector3f shift = new Vector3f(0.0f, half + lift, 0.0f).sub(turn.transform(scaledMiddle));
+        float size = scale * mul;
+        ((DisplayAccess) display).spotifycontrol$setTransformation(Platform.transformation(shift, turn,
+                new Vector3f(size, size, size)));
+    }
+
+    private static Style fontStyle(Style style, String font) {
+        String path = switch (font) {
+            case "UNIFONT" -> "uniform";
+            case "GALACTIC" -> "alt";
+            case "ILLAGER" -> "illageralt";
+            default -> null;
+        };
+        return path == null ? style : Platform.withFont(style, "minecraft", path);
     }
 
     /**

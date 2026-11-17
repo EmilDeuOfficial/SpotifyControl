@@ -212,6 +212,11 @@ public final class Platform {
         return api().onlinePlayerNames(client);
     }
 
+    public static net.minecraft.network.chat.Style withFont(net.minecraft.network.chat.Style style,
+                                                            String namespace, String path) {
+        return api().withFont(style, namespace, path);
+    }
+
     public static MutableComponent streamGlyph() {
         return api().streamGlyph();
     }

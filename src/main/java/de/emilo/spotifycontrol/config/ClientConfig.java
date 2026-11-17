@@ -115,6 +115,25 @@ public class ClientConfig {
     /** Tilt each piece of the lyrics a little at random, sideways and towards the player. */
     public boolean lyricsTilt = true;
 
+    /** How long a word takes to appear, in milliseconds. 0 shows it at once. */
+    public int lyricsFadeInMillis = 250;
+
+    /** How long a word takes to disappear, in milliseconds. 0 removes it at once. */
+    public int lyricsFadeOutMillis = 1000;
+
+    /**
+     * What a word does while it appears and disappears, on top of fading: FADE only fades, GROW
+     * also grows from or shrinks to a smaller size, RISE also drifts up from or to a line below.
+     */
+    public String lyricsInStyle = "FADE";
+    public String lyricsOutStyle = "FADE";
+
+    /** Font of the lyrics: DEFAULT, UNIFONT, GALACTIC (the enchanting table) or ILLAGER. */
+    public String lyricsFont = "DEFAULT";
+
+    /** Draw the lyrics in bold. */
+    public boolean lyricsBold = true;
+
     /** Size of the lyrics text, in percent of the normal size. */
     public int lyricsTextSize = 75;
 

@@ -212,4 +212,10 @@ public final class PlatformImpl implements PlatformApi {
                                                          org.joml.Vector3f scale) {
         return new com.mojang.math.Transformation(translation, rotation, scale, new org.joml.Quaternionf());
     }
+
+    @Override
+    public net.minecraft.network.chat.Style withFont(net.minecraft.network.chat.Style style, String namespace,
+                                                     String path) {
+        return style.withFont(ResourceLocation.fromNamespaceAndPath(namespace, path));
+    }
 }

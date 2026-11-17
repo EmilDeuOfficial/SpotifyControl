@@ -80,6 +80,12 @@ public interface PlatformApi {
     com.mojang.math.Transformation transformation(org.joml.Vector3f translation, org.joml.Quaternionf rotation,
                                                   org.joml.Vector3f scale);
 
+    /**
+     * The style with another font. The font is named by a resource location up to 1.21.10 and by a
+     * font description from 1.21.11 on, so each generation builds it itself.
+     */
+    net.minecraft.network.chat.Style withFont(net.minecraft.network.chat.Style style, String namespace, String path);
+
     /** The mod's own glyph, styled with the font that draws it. */
     MutableComponent streamGlyph();
 }
