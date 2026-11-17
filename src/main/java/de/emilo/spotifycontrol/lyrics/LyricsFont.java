@@ -10,10 +10,11 @@ import java.util.Locale;
  *
  * <p>The first four are the ones Minecraft ships with. The rest are bundled with the mod under
  * {@code assets/spotifycontrol/font}, each a TrueType file with a font definition beside it, and
- * are free to redistribute: Pacifico, Lobster, Bangers, Press Start 2P, Orbitron and Creepster
- * under the SIL Open Font License 1.1, Permanent Marker under the Apache License 2.0. Their
- * licenses are in the {@code licenses} folder of the jar. Every bundled font falls back to the
- * default font for the characters it does not have.</p>
+ * are free to redistribute under the SIL Open Font License 1.1 or the Apache License 2.0. Their
+ * licenses are in the {@code licenses} folder of the jar. Every bundled font is sized so that
+ * its capitals are as tall as Minecraft's, and shares its baseline, so a word sits at the same
+ * height whichever font it is in. Each falls back to the default font for the characters it
+ * does not have.</p>
  */
 public enum LyricsFont {
 
@@ -23,11 +24,19 @@ public enum LyricsFont {
     ILLAGER("Illager runes (cipher)", "minecraft", "illageralt"),
     PACIFICO("Pacifico", "spotifycontrol", "lyrics_pacifico"),
     LOBSTER("Lobster", "spotifycontrol", "lyrics_lobster"),
+    CAVEAT("Caveat", "spotifycontrol", "lyrics_caveat"),
+    MARKER("Permanent Marker", "spotifycontrol", "lyrics_permanentmarker"),
     BANGERS("Bangers", "spotifycontrol", "lyrics_bangers"),
-    PIXEL("Press Start 2P", "spotifycontrol", "lyrics_pressstart2p"),
-    ORBITRON("Orbitron", "spotifycontrol", "lyrics_orbitron"),
+    BEBAS("Bebas Neue", "spotifycontrol", "lyrics_bebasneue"),
+    LUCKY("Luckiest Guy", "spotifycontrol", "lyrics_luckiestguy"),
+    BLACKOPS("Black Ops One", "spotifycontrol", "lyrics_blackopsone"),
     CREEPSTER("Creepster", "spotifycontrol", "lyrics_creepster"),
-    MARKER("Permanent Marker", "spotifycontrol", "lyrics_permanentmarker");
+    RIGHTEOUS("Righteous", "spotifycontrol", "lyrics_righteous"),
+    AUDIOWIDE("Audiowide", "spotifycontrol", "lyrics_audiowide"),
+    ORBITRON("Orbitron", "spotifycontrol", "lyrics_orbitron"),
+    TYPEWRITER("Special Elite", "spotifycontrol", "lyrics_specialelite"),
+    TERMINAL("VT323", "spotifycontrol", "lyrics_vt323"),
+    PIXEL("Press Start 2P", "spotifycontrol", "lyrics_pressstart2p");
 
     private final String label;
     private final String namespace;

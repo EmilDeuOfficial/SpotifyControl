@@ -59,6 +59,8 @@ public class SettingsPanel {
 
     /** A list of choices takes this many ordinary rows, so the rows around it keep their rhythm. */
     private static final int PICKER_SPAN = 5;
+    /** The list of fonts is longer, and its names wider, than the one of animations. */
+    private static final int FONT_PICKER_SPAN = 7;
     private static final int CHIP_HEIGHT = 17;
 
     /** The wiki page that explains how to create the Spotify app and where its client ID is. */
@@ -81,8 +83,12 @@ public class SettingsPanel {
         IN_ANIMATION, OUT_ANIMATION, FONT
     }
 
+    private static int spanOf(PickerKind kind) {
+        return kind == PickerKind.FONT ? FONT_PICKER_SPAN : PICKER_SPAN;
+    }
+
     /**
-     * A list of choices with a preview. It is drawn over the {@link #PICKER_SPAN} rows it takes,
+     * A list of choices with a preview. It is drawn over the rows it takes, see {@link #spanOf},
      * the first of which is this one and the rest {@link PickerFiller}s that only redirect clicks.
      */
     private record PickerRow(String label, PickerKind kind, Supplier<String> get, Consumer<String> set)
@@ -593,7 +599,7 @@ public class SettingsPanel {
         for (int index = 0; index < rows.size(); index++) {
             int rowY = rowsY + index * ROW_HEIGHT - offset;
             Row current = rows.get(index);
-            int span = current instanceof PickerRow ? PICKER_SPAN : 1;
+            int span = current instanceof PickerRow listed ? spanOf(listed.kind()) : 1;
             if (current instanceof PickerFiller || rowY + span * ROW_HEIGHT < rowsY || rowY > rowsY + viewHeight) {
                 continue;
             }
@@ -702,7 +708,7 @@ public class SettingsPanel {
 
     private void addPicker(String label, PickerKind kind, Supplier<String> get, Consumer<String> set) {
         rows.add(new PickerRow(label, kind, get, set));
-        for (int slot = 1; slot < PICKER_SPAN; slot++) {
+        for (int slot = 1; slot < spanOf(kind); slot++) {
             rows.add(new PickerFiller(slot));
         }
     }
@@ -760,7 +766,7 @@ public class SettingsPanel {
 
     private void renderPicker(GuiGraphics graphics, Font font, PickerRow picker, int index, int x, int y, int width,
                               int mouseX, int mouseY) {
-        int blockHeight = PICKER_SPAN * ROW_HEIGHT - 6;
+        int blockHeight = spanOf(picker.kind()) * ROW_HEIGHT - 6;
         Theme.rounded(graphics, x + 4, y + 2, width - 14, blockHeight, 6, Theme.alpha(Theme.SURFACE_HOVER, 0.55f));
         Platform.drawString(graphics, font, picker.label(), x + 10, y + 8, Theme.TEXT, false);
 
@@ -780,7 +786,7 @@ public class SettingsPanel {
             float glow = Anim.hover("set.chip:" + index + ":" + i, over);
             int fill = on ? Theme.GREEN : Anim.mix(Theme.ELEVATED, Theme.SURFACE_HOVER, glow);
             Theme.rounded(graphics, r[0], r[1], r[2], r[3], 8, fill);
-            Platform.drawText(graphics, font, chipText(kind, keys[i]), r[0] + 7, r[1] + (CHIP_HEIGHT - 8) / 2,
+            Platform.drawText(graphics, font, chipText(kind, keys[i]), r[0] + 7, r[1] + (CHIP_HEIGHT - 7) / 2,
                     on ? Theme.BLACK : Anim.mix(Theme.TEXT_MUTED, Theme.TEXT, glow), false);
         }
 

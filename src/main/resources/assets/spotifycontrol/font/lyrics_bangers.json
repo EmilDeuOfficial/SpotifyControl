@@ -3,9 +3,12 @@
     {
       "type": "ttf",
       "file": "spotifycontrol:lyrics_bangers.ttf",
-      "size": 12.0,
+      "size": 9.5,
       "oversample": 8.0,
-      "shift": [0.0, 0.0]
+      "shift": [
+        0.0,
+        0.0
+      ]
     },
     {
       "type": "reference",
