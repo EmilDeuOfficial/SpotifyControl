@@ -125,7 +125,8 @@ tasks.register<Jar>("universalJar") {
     val stagingDir = layout.buildDirectory.dir("generations")
 
     archiveFileName.set("SpotifyControl_${modVersion}_1.21.x.jar")
-    destinationDirectory.set(layout.projectDirectory.dir("versions"))
+    // One folder per version, so older builds stay next to each other instead of in one pile.
+    destinationDirectory.set(layout.projectDirectory.dir("versions/v$modVersion"))
     duplicatesStrategy = DuplicatesStrategy.FAIL
 
     from(universalModJson)

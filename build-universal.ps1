@@ -14,4 +14,4 @@ Write-Host "=== merging universal jar ===" -ForegroundColor Cyan
 & .\gradlew.bat universalJar --console=plain
 if ($LASTEXITCODE -ne 0) { exit 1 }
 
-Write-Host "versions/SpotifyControl_1.0_1.21.x.jar is ready" -ForegroundColor Green
+Write-Host "the universal jar is ready in versions/v<mod_version>/" -ForegroundColor Green
