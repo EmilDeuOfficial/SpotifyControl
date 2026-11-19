@@ -59,6 +59,14 @@ at all once Lyrics in the world is switched off in the settings.
   fade times and the appear and disappear animation are picked from lists with a live preview in the settings
 - A lyrics mark after every title in the track lists shows which songs have synced lyrics, and a
   lyrics button next to the queue button switches the world lyrics on and off
+- Lyrics in colour: 14 colours and gradients from a list with a live preview, or your own colour and gradient from
+  a colour picker, independent of the interface theme. 19 animations, among them one where every letter flies in
+  on its own and one with a burst of sparks
+- Lyrics through blocks: with Visible through blocks on, the words are drawn over everything, so terrain, clouds,
+  creatures, water and particles cannot be in front of them
+- Lyrics in step: lyrics are only taken from a copy of the song that has the length of your recording, and where
+  copies disagree the timing most of them share is used. If a song is still off, Ctrl + Left and Ctrl + Right move
+  its lyrics by 250 ms at a time, and the mod remembers that for the song
 - Listening parties in two modes: SYNC keeps every member's own Spotify player on the same track and
   position, BROADCAST streams the host's desktop audio to the party through Simple Voice Chat
 - Locational broadcast option so everyone within a configurable block radius hears the host, or static
@@ -224,6 +232,16 @@ Client side, `config/spotifycontrol/client.json`:
   "lyricsInStyle": "FADE",
   "lyricsFadeOutMillis": 1000,
   "lyricsOutStyle": "FADE",
+  "lyricsColor": "THEME",
+  "lyricsCustom1Hue": 30,
+  "lyricsCustom1Saturation": 85,
+  "lyricsCustom1Brightness": 100,
+  "lyricsCustom2Hue": 200,
+  "lyricsCustom2Saturation": 85,
+  "lyricsCustom2Brightness": 100,
+  "lyricsSeeThrough": false,
+  "lyricsOffsetMillis": 0,
+  "lyricsTrackOffsets": {},
   "lyricsTextSize": 75,
   "showLyricsButton": true,
   "lyricsKept": 40,
@@ -269,8 +287,14 @@ Client side, `config/spotifycontrol/client.json`:
 | `lyricsTilt` | Tilt each word slightly at random, sideways and towards you |
 | `lyricsFont` / `lyricsBold` | Font of the words and whether they are bold. `DEFAULT`, `UNIFONT`, `GALACTIC` and `ILLAGER` come with Minecraft, the last two being ciphers that cannot be read. The rest are bundled with the mod: `PACIFICO`, `LOBSTER`, `CAVEAT`, `MARKER`, `BANGERS`, `BEBAS`, `LUCKY`, `BLACKOPS`, `CREEPSTER`, `RIGHTEOUS`, `AUDIOWIDE`, `ORBITRON`, `TYPEWRITER`, `TERMINAL` and `PIXEL` |
 | `lyricsFadeInMillis` / `lyricsFadeOutMillis` | How long a word takes to appear and to disappear, in milliseconds, 0 for instantly |
-| `lyricsInStyle` / `lyricsOutStyle` | What a word does while it appears and disappears, on top of fading: `FADE`, `GROW`, `ZOOM`, `POP`, `ELASTIC`, `RISE`, `DROP`, `BOUNCE`, `SLIDE`, `SWOOP`, `ROLL`, `SPIN`, `FLIP`, `SWING`, `SHAKE`, `WAVE` or `ZIGZAG` |
+| `lyricsInStyle` / `lyricsOutStyle` | What a word does while it appears and disappears, on top of fading: `FADE`, `GROW`, `ZOOM`, `POP`, `ELASTIC`, `RISE`, `DROP`, `BOUNCE`, `SLIDE`, `SWOOP`, `ROLL`, `SPIN`, `FLIP`, `SWING`, `SHAKE`, `WAVE`, `ZIGZAG`, `LETTERS` (every letter flies in and out on its own) or `SPARKS` (a burst of sparks) |
 | `lyricsTextSize` | Text size in percent |
+| `lyricsColor` | Colour of the words, apart from the theme: `THEME`, `WHITE`, `GOLD`, `ROSE`, `SKY`, `MINT`, the gradients `LAVA`, `OCEAN`, `SUNSET`, `CANDY`, `AURORA` and `RAINBOW`, or `CUSTOM` and `CUSTOM_GRADIENT`, which are made from the two colours below |
+| `lyricsCustom1Hue` / `lyricsCustom1Saturation` / `lyricsCustom1Brightness` | The first custom colour, hue in degrees, saturation and brightness in percent. Picked with the colour field in the settings |
+| `lyricsCustom2Hue` / `lyricsCustom2Saturation` / `lyricsCustom2Brightness` | The second colour, the end of `CUSTOM_GRADIENT` |
+| `lyricsSeeThrough` | Draw the words over the picture, so nothing in the world is in front of them, the way they show through blocks. They are turned towards you and keep their place in the world; on 1.21.9 and newer it is rebuilt from your view, so it can drift a little while you walk |
+| `lyricsOffsetMillis` | Moves all lyrics earlier (positive) or later (negative), in milliseconds |
+| `lyricsTrackOffsets` | Song to milliseconds, set with Ctrl + Left and Ctrl + Right while the song plays. Added to `lyricsOffsetMillis` |
 | `showLyricsButton` | Show the lyrics button next to the queue button |
 | `lyricsKeepMode` | When words fade out: LINE when their line ends, COUNT beyond `lyricsKept` words, SECONDS after `lyricsSeconds` |
 | `lyricsKept` / `lyricsSeconds` | Word count and lifetime used by the modes above |
@@ -298,6 +322,8 @@ All bindings are rebindable in the vanilla Controls screen under the SpotifyCont
 | Volume up | Ctrl + Page Up | Raise volume by `overlayVolumeStep` |
 | Volume down | Ctrl + Page Down | Lower volume by `overlayVolumeStep` |
 | Toggle now-playing HUD | Ctrl + H | Show or hide the HUD |
+| Lyrics earlier (this song) | Ctrl + Left | Show the lyrics of the playing song 250 ms earlier |
+| Lyrics later (this song) | Ctrl + Right | Show the lyrics of the playing song 250 ms later |
 
 ## Permissions
 

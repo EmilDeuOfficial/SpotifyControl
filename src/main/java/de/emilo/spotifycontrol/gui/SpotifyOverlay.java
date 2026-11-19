@@ -727,10 +727,11 @@ public class SpotifyOverlay {
         // multiplied by what each counts in: a radius is rasterized at twice itself and an icon is
         // rounded to an even size, so asking them separately made them step a frame or two apart.
         boolean animated = Anim.enabled();
-        int playStep = animated ? Anim.growSteps(playHover, 1) - Anim.pressStep("detail.play") : 0;
-        Theme.circle(graphics, textX + 13, contentY + 75, (animated || !playHovered ? 13 : 14) + playStep,
+        float playGrow = animated ? Anim.grownExact(0.0f, playHover, 1.0f) - Anim.pressExact("detail.play", 1.0f) : 0.0f;
+        Theme.circleExact(graphics, textX + 13, contentY + 75,
+                (animated || !playHovered ? 13.0f : 14.0f) + playGrow,
                 playHovered ? Theme.GREEN_BRIGHT : Theme.GREEN);
-        Icons.play(graphics, textX + 14, contentY + 75, 12 + playStep * Anim.ICON_STEP, Theme.BLACK);
+        Icons.play(graphics, textX + 14, contentY + 75, 12.0f + playGrow * Anim.ICON_STEP, Theme.BLACK);
 
         int bodyY = contentY + 96;
         trackList.setCurrentUri(ClientState.session().playback().track().uri());
@@ -1459,7 +1460,7 @@ public class SpotifyOverlay {
         if (playerBar.mouseDragged(mouseX)) {
             return true;
         }
-        return view == View.SETTINGS && settingsPanel.mouseDragged(mouseX);
+        return view == View.SETTINGS && settingsPanel.mouseDragged(mouseX, mouseY);
     }
 
     /** The scroll area the current view shows a bar for, or null if it shows none. */

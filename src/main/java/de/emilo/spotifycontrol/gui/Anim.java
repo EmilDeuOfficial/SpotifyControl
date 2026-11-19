@@ -261,6 +261,28 @@ public final class Anim {
     }
 
     /**
+      * The size of a growing icon or disc, not rounded to anything. Drawn through
+      * {@link de.emilo.spotifycontrol.gui.raster.RasterCache#drawIconExact}, which rasterizes it at
+      * the device pixels it covers, so it grows one device pixel at a time instead of in jumps.
+      */
+    public static float grownExact(float size, float amount, float grow) {
+        if (!enabled()) {
+            return size;
+        }
+        return size + grow * Math.max(0.0f, Math.min(1.0f, amount));
+    }
+
+    /** {@link #pressInset} without the rounding, for something drawn through {@link #grownExact}. */
+    public static float pressExact(String id, float depth) {
+        float scale = clickScale(id);
+        if (scale == 1.0f) {
+            return 0.0f;
+        }
+        float span = scale < 1.0f ? 1.0f - CLICK_SQUASH : CLICK_PEAK - 1.0f;
+        return depth * (1.0f - scale) / span;
+    }
+
+    /**
       * Whole pixels an icon grows by, and gives up while pressed.
       *
       * <p>Two, and that is arithmetic rather than taste. An icon is rasterized to an even number of

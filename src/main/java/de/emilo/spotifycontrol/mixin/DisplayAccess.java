@@ -25,6 +25,12 @@ public interface DisplayAccess {
     @Invoker("setTransformation")
     void spotifycontrol$setTransformation(Transformation transformation);
 
+    @Invoker("setTransformationInterpolationDuration")
+    void spotifycontrol$setInterpolationDuration(int ticks);
+
+    @Invoker("setTransformationInterpolationDelay")
+    void spotifycontrol$setInterpolationDelay(int ticks);
+
     @Invoker("setViewRange")
     void spotifycontrol$setViewRange(float range);
 }

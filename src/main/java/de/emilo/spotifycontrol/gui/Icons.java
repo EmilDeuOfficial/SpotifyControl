@@ -29,99 +29,101 @@ public final class Icons {
       * A circle is exempt: {@link Theme#circle} is asked for a radius and rasterized at twice it, so
       * its steps are already even.
       */
-    private static void draw(GuiGraphics graphics, String name, String data, int cx, int cy, int size, int color) {
-        int extent = Math.max(4, (size + 1) & ~1);
-        RasterCache.drawIcon(graphics, name, data, cx - extent / 2, cy - extent / 2, extent, color);
+    private static void draw(GuiGraphics graphics, String name, String data, int cx, int cy, float size, int color) {
+        // The size is not rounded to interface pixels any more. The icon is rasterized at the device
+        // pixels it covers and placed on the device pixel grid, so a growing icon takes one device
+        // pixel at a time, which at gui scale 3 is a third of the step it used to take.
+        RasterCache.drawIconExact(graphics, name, data, cx, cy, Math.max(4.0f, size), color);
     }
 
-    public static void play(GuiGraphics graphics, int cx, int cy, int size, int color) {
+    public static void play(GuiGraphics graphics, int cx, int cy, float size, int color) {
         if (Theme.smooth()) {
             draw(graphics, "play", VectorIcons.PLAY, cx, cy, size, color);
         } else {
-            PixelIcons.play(graphics, cx, cy, size, color);
+            PixelIcons.play(graphics, cx, cy, Math.round(size), color);
         }
     }
 
-    public static void pause(GuiGraphics graphics, int cx, int cy, int size, int color) {
+    public static void pause(GuiGraphics graphics, int cx, int cy, float size, int color) {
         if (Theme.smooth()) {
             draw(graphics, "pause", VectorIcons.PAUSE, cx, cy, size, color);
         } else {
-            PixelIcons.pause(graphics, cx, cy, size, color);
+            PixelIcons.pause(graphics, cx, cy, Math.round(size), color);
         }
     }
 
-    public static void next(GuiGraphics graphics, int cx, int cy, int size, int color) {
+    public static void next(GuiGraphics graphics, int cx, int cy, float size, int color) {
         if (Theme.smooth()) {
             draw(graphics, "next", VectorIcons.NEXT, cx, cy, size, color);
         } else {
-            PixelIcons.next(graphics, cx, cy, size, color);
+            PixelIcons.next(graphics, cx, cy, Math.round(size), color);
         }
     }
 
-    public static void previous(GuiGraphics graphics, int cx, int cy, int size, int color) {
+    public static void previous(GuiGraphics graphics, int cx, int cy, float size, int color) {
         if (Theme.smooth()) {
             draw(graphics, "previous", VectorIcons.PREVIOUS, cx, cy, size, color);
         } else {
-            PixelIcons.previous(graphics, cx, cy, size, color);
+            PixelIcons.previous(graphics, cx, cy, Math.round(size), color);
         }
     }
 
-    public static void shuffle(GuiGraphics graphics, int cx, int cy, int size, int color) {
+    public static void shuffle(GuiGraphics graphics, int cx, int cy, float size, int color) {
         if (Theme.smooth()) {
             draw(graphics, "shuffle", VectorIcons.SHUFFLE, cx, cy, size, color);
         } else {
-            PixelIcons.shuffle(graphics, cx, cy, size, color);
+            PixelIcons.shuffle(graphics, cx, cy, Math.round(size), color);
         }
     }
 
-    public static void repeat(GuiGraphics graphics, int cx, int cy, int size, int color) {
+    public static void repeat(GuiGraphics graphics, int cx, int cy, float size, int color) {
         if (Theme.smooth()) {
             draw(graphics, "repeat", VectorIcons.REPEAT, cx, cy, size, color);
         } else {
-            PixelIcons.repeat(graphics, cx, cy, size, color);
+            PixelIcons.repeat(graphics, cx, cy, Math.round(size), color);
         }
     }
 
-    public static void heart(GuiGraphics graphics, int cx, int cy, int size, int color) {
+    public static void heart(GuiGraphics graphics, int cx, int cy, float size, int color) {
         heart(graphics, cx, cy, size, true, color);
     }
 
-    public static void heart(GuiGraphics graphics, int cx, int cy, int size, boolean filled, int color) {
+    public static void heart(GuiGraphics graphics, int cx, int cy, float size, boolean filled, int color) {
         if (Theme.smooth()) {
             draw(graphics, filled ? "heart" : "heart_outline",
                     filled ? VectorIcons.HEART : VectorIcons.HEART_OUTLINE, cx, cy, size, color);
         } else {
-            PixelIcons.heart(graphics, cx, cy, size, color);
+            PixelIcons.heart(graphics, cx, cy, Math.round(size), color);
         }
     }
 
-    public static void search(GuiGraphics graphics, int cx, int cy, int size, int color) {
+    public static void search(GuiGraphics graphics, int cx, int cy, float size, int color) {
         if (Theme.smooth()) {
             draw(graphics, "search", VectorIcons.SEARCH, cx, cy, size, color);
         } else {
-            PixelIcons.search(graphics, cx, cy, size, color);
+            PixelIcons.search(graphics, cx, cy, Math.round(size), color);
         }
     }
 
-    public static void home(GuiGraphics graphics, int cx, int cy, int size, int color) {
+    public static void home(GuiGraphics graphics, int cx, int cy, float size, int color) {
         if (Theme.smooth()) {
             draw(graphics, "home", VectorIcons.HOME, cx, cy, size, color);
         } else {
-            PixelIcons.home(graphics, cx, cy, size, color);
+            PixelIcons.home(graphics, cx, cy, Math.round(size), color);
         }
     }
 
-    public static void library(GuiGraphics graphics, int cx, int cy, int size, int color) {
+    public static void library(GuiGraphics graphics, int cx, int cy, float size, int color) {
         if (Theme.smooth()) {
             draw(graphics, "library", VectorIcons.LIBRARY, cx, cy, size, color);
         } else {
-            PixelIcons.library(graphics, cx, cy, size, color);
+            PixelIcons.library(graphics, cx, cy, Math.round(size), color);
         }
     }
 
-    public static void speaker(GuiGraphics graphics, int cx, int cy, int size, int level, int color) {
+    public static void speaker(GuiGraphics graphics, int cx, int cy, float size, int level, int color) {
         if (!Theme.smooth()) {
-            PixelIcons.speaker(graphics, cx, cy, size, level, color);
+            PixelIcons.speaker(graphics, cx, cy, Math.round(size), level, color);
             return;
         }
         String data = switch (Math.max(0, Math.min(3, level))) {
@@ -132,75 +134,75 @@ public final class Icons {
         draw(graphics, "speaker" + level, data, cx, cy, size, color);
     }
 
-    public static void devices(GuiGraphics graphics, int cx, int cy, int size, int color) {
+    public static void devices(GuiGraphics graphics, int cx, int cy, float size, int color) {
         if (Theme.smooth()) {
             draw(graphics, "devices", VectorIcons.DEVICES, cx, cy, size, color);
         } else {
-            PixelIcons.devices(graphics, cx, cy, size, color);
+            PixelIcons.devices(graphics, cx, cy, Math.round(size), color);
         }
     }
 
-    public static void plus(GuiGraphics graphics, int cx, int cy, int size, int color) {
+    public static void plus(GuiGraphics graphics, int cx, int cy, float size, int color) {
         if (Theme.smooth()) {
             draw(graphics, "plus", VectorIcons.PLUS, cx, cy, size, color);
         } else {
-            PixelIcons.plus(graphics, cx, cy, size, color);
+            PixelIcons.plus(graphics, cx, cy, Math.round(size), color);
         }
     }
 
-    public static void close(GuiGraphics graphics, int cx, int cy, int size, int color) {
+    public static void close(GuiGraphics graphics, int cx, int cy, float size, int color) {
         if (Theme.smooth()) {
             draw(graphics, "close", VectorIcons.CLOSE, cx, cy, size, color);
         } else {
-            PixelIcons.close(graphics, cx, cy, size, color);
+            PixelIcons.close(graphics, cx, cy, Math.round(size), color);
         }
     }
 
-    public static void queue(GuiGraphics graphics, int cx, int cy, int size, int color) {
+    public static void queue(GuiGraphics graphics, int cx, int cy, float size, int color) {
         if (Theme.smooth()) {
             draw(graphics, "queue", VectorIcons.QUEUE, cx, cy, size, color);
         } else {
-            PixelIcons.queue(graphics, cx, cy, size, color);
+            PixelIcons.queue(graphics, cx, cy, Math.round(size), color);
         }
     }
 
-    public static void lyrics(GuiGraphics graphics, int cx, int cy, int size, int color) {
+    public static void lyrics(GuiGraphics graphics, int cx, int cy, float size, int color) {
         if (Theme.smooth()) {
             draw(graphics, "lyrics", VectorIcons.LYRICS, cx, cy, size, color);
         } else {
-            PixelIcons.lyrics(graphics, cx, cy, size, color);
+            PixelIcons.lyrics(graphics, cx, cy, Math.round(size), color);
         }
     }
 
-    public static void people(GuiGraphics graphics, int cx, int cy, int size, int color) {
+    public static void people(GuiGraphics graphics, int cx, int cy, float size, int color) {
         if (Theme.smooth()) {
             draw(graphics, "people", VectorIcons.PEOPLE, cx, cy, size, color);
         } else {
-            PixelIcons.people(graphics, cx, cy, size, color);
+            PixelIcons.people(graphics, cx, cy, Math.round(size), color);
         }
     }
 
-    public static void gear(GuiGraphics graphics, int cx, int cy, int size, int color) {
+    public static void gear(GuiGraphics graphics, int cx, int cy, float size, int color) {
         if (Theme.smooth()) {
             draw(graphics, "gear", VectorIcons.GEAR, cx, cy, size, color);
         } else {
-            PixelIcons.gear(graphics, cx, cy, size, color);
+            PixelIcons.gear(graphics, cx, cy, Math.round(size), color);
         }
     }
 
-    public static void note(GuiGraphics graphics, int cx, int cy, int size, int color) {
+    public static void note(GuiGraphics graphics, int cx, int cy, float size, int color) {
         if (Theme.smooth()) {
             draw(graphics, "note", VectorIcons.NOTE, cx, cy, size, color);
         } else {
-            PixelIcons.library(graphics, cx, cy, size, color);
+            PixelIcons.library(graphics, cx, cy, Math.round(size), color);
         }
     }
 
-    public static void check(GuiGraphics graphics, int cx, int cy, int size, int color) {
+    public static void check(GuiGraphics graphics, int cx, int cy, float size, int color) {
         if (Theme.smooth()) {
             draw(graphics, "check", VectorIcons.CHECK, cx, cy, size, color);
         } else {
-            PixelIcons.plus(graphics, cx, cy, size, color);
+            PixelIcons.plus(graphics, cx, cy, Math.round(size), color);
         }
     }
 

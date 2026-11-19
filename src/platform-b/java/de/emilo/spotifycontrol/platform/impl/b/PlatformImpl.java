@@ -122,6 +122,15 @@ public final class PlatformImpl implements PlatformApi {
     }
 
     @Override
+    public void registerWorldView(WorldViewReceiver receiver) {
+        net.fabricmc.fabric.api.client.rendering.v1.WorldRenderEvents.LAST.register(context -> {
+            org.joml.Matrix4f projection = context.projectionMatrix();
+            org.joml.Matrix4f clip = new org.joml.Matrix4f(projection).mul(context.positionMatrix());
+            receiver.accept(clip, context.camera().getPosition(), projection.m11());
+        });
+    }
+
+    @Override
     public void registerHud(Consumer<GuiGraphics> renderer) {
         HudRenderCallback.EVENT.register((graphics, tickCounter) -> {
             graphics.pose().pushPose();

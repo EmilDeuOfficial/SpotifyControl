@@ -231,6 +231,18 @@ public final class Theme {
         RasterCache.drawShape(graphics, "circle", IconShapes.CIRCLE, centerX - radius, centerY - radius, size, color);
     }
 
+    /** {@link #circle} for a radius that is not a whole number, so a growing disc grows a device pixel at a time. */
+    public static void circleExact(GuiGraphics graphics, int centerX, int centerY, float radius, int color) {
+        if (radius <= 0.0f) {
+            return;
+        }
+        if (radius < 2.0f || !smooth()) {
+            pixelCircle(graphics, centerX, centerY, Math.round(radius), color);
+            return;
+        }
+        RasterCache.drawShapeExact(graphics, "circle", IconShapes.CIRCLE, centerX, centerY, radius * 2.0f, color);
+    }
+
     private static void pixelRounded(GuiGraphics graphics, int x, int y, int width, int height, int r, int color,
                                      int corners) {
         graphics.fill(x + r, y, x + width - r, y + height, color);

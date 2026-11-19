@@ -131,6 +131,36 @@ public class ClientConfig {
     /** Font of the lyrics: DEFAULT, UNIFONT, GALACTIC (the enchanting table) or ILLAGER. */
     public String lyricsFont = "DEFAULT";
 
+    /**
+     * The colour of the lyrics, apart from the theme colour of the interface: THEME follows it,
+     * the others are fixed colours and gradients, see LyricsColor. CUSTOM and CUSTOM_GRADIENT are
+     * made from the two picked colours below, each as hue in degrees and saturation and brightness
+     * in percent. The second one is only used by the gradient.
+     */
+    public String lyricsColor = "THEME";
+    public int lyricsCustom1Hue = 30;
+    public int lyricsCustom1Saturation = 85;
+    public int lyricsCustom1Brightness = 100;
+    public int lyricsCustom2Hue = 200;
+    public int lyricsCustom2Saturation = 85;
+    public int lyricsCustom2Brightness = 100;
+
+    /**
+     * Show the lyrics through blocks too, so they can be read from underground or behind a wall.
+     * They are then drawn over the whole picture, clouds, creatures, water and particles included.
+     */
+    public boolean lyricsSeeThrough = false;
+
+    /** Moves the lyrics earlier (positive) or later (negative), in milliseconds, for a setup that is out of step. */
+    public int lyricsOffsetMillis = 0;
+
+    /**
+     * The same for one song, set with the lyrics keys while it plays: track URI to milliseconds,
+     * added to the offset above. Recordings of one song differ in length and timing, so a song that
+     * is out of step is out by about the same amount every time it is played.
+     */
+    public java.util.Map<String, Integer> lyricsTrackOffsets = new java.util.LinkedHashMap<>();
+
     /** Draw the lyrics in bold. */
     public boolean lyricsBold = true;
 

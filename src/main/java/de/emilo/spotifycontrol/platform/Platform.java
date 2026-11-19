@@ -180,6 +180,10 @@ public final class Platform {
         api().registerHud(renderer);
     }
 
+    public static void registerWorldView(PlatformApi.WorldViewReceiver receiver) {
+        api().registerWorldView(receiver);
+    }
+
     public static boolean click(GuiEventListener widget, double mouseX, double mouseY, int button) {
         return api().click(widget, mouseX, mouseY, button);
     }

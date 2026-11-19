@@ -98,6 +98,141 @@ public final class RasterCache {
         }
     }
 
+    /**
+     * Like {@link #drawIcon}, but for a size that is not a whole number of interface pixels, so an
+     * icon can grow by one device pixel at a time instead of by one interface pixel.
+     *
+     * <p>The outline is rasterized at exactly the device pixels it will cover and then placed on the
+     * device pixel grid, so it is still sampled one to one and stays sharp. Only the way it is put on
+     * screen is fractional: a translate and a scale of the quad that holds the texture.</p>
+     *
+     * @param cx centre, in interface pixels
+     * @param cy centre, in interface pixels
+     */
+    public static void drawIconExact(GuiGraphics graphics, String name, String data, float cx, float cy,
+                                     float size, int color) {
+        if (size <= 0.0f || broken) {
+            return;
+        }
+        int scale = scale();
+        if (ConfigManager.client().smoothGraphics) {
+            drawFractional(graphics, "icon/" + name, () -> VectorRaster.rasterize(data, SOURCE_PIXELS, 0xFFFFFFFF, false),
+                    cx, cy, size, color, scale);
+            return;
+        }
+        int device = Math.max(2, Math.round(size * scale));
+        int pixels = rasterPixelsOfDevice(device);
+        String key = "icon/" + name + "/" + modeTag() + "/" + pixels + "/" + Integer.toHexString(color);
+        Object handle = texture(key, pixels, pixels, () -> VectorRaster.rasterize(data, pixels, color, !ConfigManager.client().smoothGraphics));
+        if (handle != null) {
+            drawOnDeviceGrid(graphics, handle, cx, cy, device, scale);
+        }
+    }
+
+    /** {@link #drawShape} for a size that is not a whole number of interface pixels. See {@link #drawIconExact}. */
+    public static void drawShapeExact(GuiGraphics graphics, String name, Shape shape, float cx, float cy,
+                                      float size, int color) {
+        if (size <= 0.0f || broken) {
+            return;
+        }
+        int scale = scale();
+        if (ConfigManager.client().smoothGraphics) {
+            drawFractional(graphics, "shape/" + name, () -> rasterizeShape(shape, SOURCE_PIXELS, 0xFFFFFFFF),
+                    cx, cy, size, color, scale);
+            return;
+        }
+        int device = Math.max(2, Math.round(size * scale));
+        int pixels = rasterPixelsOfDevice(device);
+        String key = "shape/" + name + "/" + modeTag() + "/" + pixels + "/" + Integer.toHexString(color);
+        Object handle = texture(key, pixels, pixels, () -> rasterizeShape(shape, pixels, color));
+        if (handle != null) {
+            drawOnDeviceGrid(graphics, handle, cx, cy, device, scale);
+        }
+    }
+
+    /** Resolution of the master picture a shape is kept at, which every fractional size is cut from. */
+    private static final int SOURCE_PIXELS = 128;
+    private static final int MAX_SOURCES = 64;
+    private static final Map<String, int[]> SOURCES = new LinkedHashMap<>(64, 0.75f, true) {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<String, int[]> eldest) {
+            return size() > MAX_SOURCES;
+        }
+    };
+
+    /**
+     * Draws a shape at a size that is a fraction of a device pixel, 1/8 of one at a time. The shape
+     * is kept once, large and white; each size is the area average of that master over the device
+     * pixels it covers, so the edge is anti-aliased at exactly the size asked for and a growing icon
+     * grows continuously instead of jumping from one whole pixel size to the next.
+     */
+    private static void drawFractional(GuiGraphics graphics, String name, PixelSource master, float cx, float cy,
+                                       float size, int color, int scale) {
+        float extent = Math.min(MAX_ICON_PIXELS, Math.max(2.0f, Math.round(size * scale * 8.0f) / 8.0f));
+        int pixels = (int) Math.ceil(extent);
+        String key = name + "/f/" + pixels + "/" + Math.round(extent * 8.0f) + "/" + Integer.toHexString(color);
+        Object handle = texture(key, pixels, pixels, () -> {
+            int[] source = SOURCES.get(name);
+            if (source == null) {
+                source = master.pixels();
+                SOURCES.put(name, source);
+            }
+            return resample(source, SOURCE_PIXELS, pixels, extent, color);
+        });
+        if (handle != null) {
+            drawOnDeviceGrid(graphics, handle, cx, cy, pixels, scale);
+        }
+    }
+
+    /**
+     * The master picture, shrunk to {@code extent} pixels in the middle of a square of {@code pixels},
+     * tinted with {@code color}. Each result pixel averages the master pixels it covers.
+     */
+    private static int[] resample(int[] source, int sourcePixels, int pixels, float extent, int color) {
+        int[] out = new int[pixels * pixels];
+        float margin = (pixels - extent) / 2.0f;
+        float ratio = sourcePixels / extent;
+        int rgb = color & 0xFFFFFF;
+        float tint = ((color >>> 24) & 0xFF) / 255.0f;
+        for (int y = 0; y < pixels; y++) {
+            float v0 = (y - margin) * ratio;
+            float v1 = (y + 1 - margin) * ratio;
+            for (int x = 0; x < pixels; x++) {
+                float u0 = (x - margin) * ratio;
+                float u1 = (x + 1 - margin) * ratio;
+                float sum = 0.0f;
+                for (int sy = Math.max(0, (int) Math.floor(v0)); sy < Math.min(sourcePixels, (int) Math.ceil(v1)); sy++) {
+                    float wy = Math.min(sy + 1, v1) - Math.max(sy, v0);
+                    for (int sx = Math.max(0, (int) Math.floor(u0)); sx < Math.min(sourcePixels, (int) Math.ceil(u1)); sx++) {
+                        float wx = Math.min(sx + 1, u1) - Math.max(sx, u0);
+                        sum += ((source[sy * sourcePixels + sx] >>> 24) & 0xFF) * wx * wy;
+                    }
+                }
+                float alpha = sum / (ratio * ratio) * tint;
+                out[y * pixels + x] = (Math.max(0, Math.min(255, Math.round(alpha))) << 24) | rgb;
+            }
+        }
+        return out;
+    }
+
+    private static int rasterPixelsOfDevice(int device) {
+        int full = Math.max(1, Math.min(MAX_ICON_PIXELS, device));
+        if (ConfigManager.client().smoothGraphics) {
+            return full;
+        }
+        return Math.max(3, full / PIXEL_BLOCK);
+    }
+
+    /** Draws the texture {@code device} device pixels wide, its top left corner on a whole device pixel. */
+    private static void drawOnDeviceGrid(GuiGraphics graphics, Object handle, float cx, float cy, int device,
+                                         int scale) {
+        float left = Math.round(cx * scale - device / 2.0f) / (float) scale;
+        float top = Math.round(cy * scale - device / 2.0f) / (float) scale;
+        Platform.pushScale(graphics, left, top, device / (float) scale);
+        Platform.drawTexture(graphics, handle, 0, 0, 1, 1);
+        Platform.popMatrix(graphics);
+    }
+
     public static void drawCorner(GuiGraphics graphics, int quadrant, int x, int y, int radius, int color,
                                   boolean inverted) {
         if (radius <= 0 || broken) {

@@ -64,8 +64,18 @@ public class SpotifyApi {
     }
 
     public PlaybackState playback() {
+        long started = System.nanoTime();
         JsonObject json = get("/v1/me/player", Map.of("additional_types", "track"));
-        return json == null ? PlaybackState.IDLE : PlaybackState.from(json);
+        if (json == null) {
+            return PlaybackState.IDLE;
+        }
+        PlaybackState state = PlaybackState.from(json);
+        // The position is the one at the moment Spotify answered. It was on its way to us for half
+        // the time the request took, and the song went on meanwhile, so that time is added.
+        // Without it every position is late by the connection's delay, which is what made the
+        // lyrics lag behind on a slow connection.
+        long oneWay = Math.min(1500L, (System.nanoTime() - started) / 2_000_000L);
+        return state.playing() ? state.withProgress(state.progressMs() + oneWay) : state;
     }
 
     public List<Device> devices() {

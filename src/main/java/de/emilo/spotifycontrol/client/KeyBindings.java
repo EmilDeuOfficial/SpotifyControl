@@ -15,6 +15,8 @@ public final class KeyBindings {
     private static KeyMapping volumeUp;
     private static KeyMapping volumeDown;
     private static KeyMapping toggleHud;
+    private static KeyMapping lyricsEarlier;
+    private static KeyMapping lyricsLater;
 
     private KeyBindings() {
     }
@@ -27,6 +29,8 @@ public final class KeyBindings {
         volumeUp = bind("key.spotifycontrol.volume_up", GLFW.GLFW_KEY_PAGE_UP);
         volumeDown = bind("key.spotifycontrol.volume_down", GLFW.GLFW_KEY_PAGE_DOWN);
         toggleHud = bind("key.spotifycontrol.toggle_hud", GLFW.GLFW_KEY_H);
+        lyricsEarlier = bind("key.spotifycontrol.lyrics_earlier", GLFW.GLFW_KEY_LEFT);
+        lyricsLater = bind("key.spotifycontrol.lyrics_later", GLFW.GLFW_KEY_RIGHT);
     }
 
     private static KeyMapping bind(String translationKey, int defaultKey) {
@@ -67,10 +71,31 @@ public final class KeyBindings {
         if (consume(volumeDown, modifier)) {
             ClientState.session().changeVolume(-step);
         }
+        if (consume(lyricsEarlier, modifier)) {
+            shiftLyrics(client, LYRICS_STEP_MILLIS);
+        }
+        if (consume(lyricsLater, modifier)) {
+            shiftLyrics(client, -LYRICS_STEP_MILLIS);
+        }
         if (consume(toggleHud, modifier)) {
             ConfigManager.client().showNowPlayingHud = !ConfigManager.client().showNowPlayingHud;
             ConfigManager.saveClient();
         }
+    }
+
+    /** How far one press moves the lyrics of the playing song. */
+    private static final int LYRICS_STEP_MILLIS = 250;
+
+    /** Moves the lyrics of the playing song and says by how much they are moved now. */
+    private static void shiftLyrics(Minecraft client, int delta) {
+        String uri = ClientState.session().playback().track().uri();
+        if (uri.isEmpty() || client.player == null) {
+            return;
+        }
+        int value = de.emilo.spotifycontrol.lyrics.WorldLyrics.shiftTrackOffset(uri, delta);
+        String text = value == 0 ? "Lyrics of this song: in step"
+                : "Lyrics of this song: " + Math.abs(value) + " ms " + (value > 0 ? "earlier" : "later");
+        client.player.displayClientMessage(net.minecraft.network.chat.Component.literal(text), true);
     }
 
     private static boolean consume(KeyMapping mapping, boolean modifierHeld) {

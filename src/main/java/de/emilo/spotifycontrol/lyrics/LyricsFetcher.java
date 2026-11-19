@@ -54,6 +54,9 @@ final class LyricsFetcher {
         }
     };
 
+    /** Largest difference in length, in seconds, between the track and the lyrics found for it. */
+    private static final double MAX_DURATION_GAP_SECONDS = 4.0;
+
     private LyricsFetcher() {
     }
 
@@ -90,17 +93,43 @@ final class LyricsFetcher {
                 return List.of();
             }
             JsonArray results = JsonParser.parseString(found).getAsJsonArray();
-            JsonObject best = null;
-            double bestGap = Double.MAX_VALUE;
+            double seconds = track.durationMs() / 1000.0;
+            // Every entry that could be this recording. LRCLIB holds the same song many times, from
+            // many albums, and the timings of those copies do not all agree: some carry the timing of
+            // another edit under the length of this one. So an entry has to be the same song, about
+            // the same length, and may not have a lyric after the track is over.
+            List<JsonObject> fitting = new ArrayList<>();
             for (JsonElement element : results) {
                 JsonObject candidate = element.getAsJsonObject();
-                if (!hasSynced(candidate)) {
+                if (!hasSynced(candidate) || !sameSong(candidate, track.title(), artist)) {
                     continue;
                 }
-                double gap = candidate.has("duration") && !candidate.get("duration").isJsonNull()
-                        ? Math.abs(candidate.get("duration").getAsDouble() - track.durationMs() / 1000.0)
-                        : 1000.0;
-                if (gap < bestGap) {
+                double length = candidate.has("duration") && !candidate.get("duration").isJsonNull()
+                        ? candidate.get("duration").getAsDouble()
+                        : -1000.0;
+                if (Math.abs(length - seconds) > MAX_DURATION_GAP_SECONDS) {
+                    continue;
+                }
+                List<Line> parsed = fromRecord(candidate);
+                if (parsed.isEmpty() || parsed.get(parsed.size() - 1).startMs() > (seconds + 2.0) * 1000.0) {
+                    continue;
+                }
+                fitting.add(candidate);
+            }
+            // Of what is left, the timing most copies agree on is the one to trust: a copy with
+            // its own first line is much more likely to be the odd one out than the rest.
+            Map<Long, Integer> votes = new LinkedHashMap<>();
+            for (JsonObject candidate : fitting) {
+                votes.merge(timingKey(candidate), 1, Integer::sum);
+            }
+            JsonObject best = null;
+            int bestVotes = -1;
+            double bestGap = Double.MAX_VALUE;
+            for (JsonObject candidate : fitting) {
+                int count = votes.get(timingKey(candidate));
+                double gap = Math.abs(candidate.get("duration").getAsDouble() - seconds);
+                if (count > bestVotes || (count == bestVotes && gap < bestGap)) {
+                    bestVotes = count;
                     bestGap = gap;
                     best = candidate;
                 }
@@ -114,6 +143,48 @@ final class LyricsFetcher {
             pausedUntilMillis = System.currentTimeMillis() + 1000L;
             return null;
         }
+    }
+
+    /** Which timing an entry has, as the start of its first line in two second steps. */
+    private static long timingKey(JsonObject record) {
+        List<Line> lines = fromRecord(record);
+        for (Line line : lines) {
+            if (!line.text().isBlank()) {
+                return Math.round(line.startMs() / 2000.0);
+            }
+        }
+        return -1L;
+    }
+
+    /** Whether the entry is for this song by this artist and not for another one that comes up in the search. */
+    private static boolean sameSong(JsonObject record, String title, String artist) {
+        String wantedTitle = normalize(title);
+        String foundTitle = normalize(text(record, "trackName"));
+        boolean titleMatches = !wantedTitle.isEmpty() && (wantedTitle.equals(foundTitle)
+                || (Math.min(wantedTitle.length(), foundTitle.length()) >= 6
+                && (wantedTitle.contains(foundTitle) || foundTitle.contains(wantedTitle))));
+        String wantedArtist = normalize(artist);
+        String foundArtist = normalize(text(record, "artistName"));
+        boolean artistMatches = wantedArtist.isEmpty() || foundArtist.isEmpty()
+                || wantedArtist.contains(foundArtist) || foundArtist.contains(wantedArtist);
+        return titleMatches && artistMatches;
+    }
+
+    private static String text(JsonObject record, String key) {
+        return record.has(key) && !record.get(key).isJsonNull() ? record.get(key).getAsString() : "";
+    }
+
+    /** Lower case letters and digits only, without brackets and what follows a dash: "Song - Remastered" is "song". */
+    private static String normalize(String value) {
+        if (value == null) {
+            return "";
+        }
+        String cut = value.replaceAll("\\(.*?\\)|\\[.*?]", " ");
+        int dash = cut.indexOf(" - ");
+        if (dash >= 0) {
+            cut = cut.substring(0, dash);
+        }
+        return cut.toLowerCase(java.util.Locale.ROOT).replaceAll("[^\\p{L}\\p{N}]", "");
     }
 
     /** Thrown when LRCLIB asks to slow down. */

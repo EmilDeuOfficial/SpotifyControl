@@ -7,5 +7,7 @@
   "key.spotifycontrol.previous": "Vorheriger Titel",
   "key.spotifycontrol.volume_up": "Lautstaerke lauter",
   "key.spotifycontrol.volume_down": "Lautstaerke leiser",
-  "key.spotifycontrol.toggle_hud": "Now-Playing-HUD umschalten"
+  "key.spotifycontrol.toggle_hud": "Now-Playing-HUD umschalten",
+  "key.spotifycontrol.lyrics_earlier": "Lyrics frueher (dieser Song)",
+  "key.spotifycontrol.lyrics_later": "Lyrics spaeter (dieser Song)"
 }

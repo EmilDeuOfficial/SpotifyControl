@@ -131,7 +131,7 @@ public class Sidebar {
         int iconY = y + rowHeight / 2;
         // The row gives one pixel, the icon on it two: an icon is rasterized to an even number of
         // pixels, so one would land on the same picture and it would sit still while the row moved.
-        int iconSize = Anim.grownSize(12, hover, Anim.ICON_STEP) - Anim.iconPress(id);
+        float iconSize = Anim.grownExact(12.0f, hover, Anim.ICON_STEP) - Anim.pressExact(id, Anim.ICON_STEP);
         switch (icon) {
             case 0 -> Icons.home(graphics, iconX, iconY, iconSize, iconColor);
             case 1 -> Icons.search(graphics, iconX, iconY, iconSize, iconColor);

@@ -134,6 +134,11 @@ public final class PlatformImpl implements PlatformApi {
     }
 
     @Override
+    public void registerWorldView(WorldViewReceiver receiver) {
+        // The game no longer hands the projection over here: the lyrics rebuild it themselves.
+    }
+
+    @Override
     public void registerHud(Consumer<GuiGraphics> renderer) {
         HudRenderCallback.EVENT.register((graphics, tickCounter) -> renderer.accept(graphics));
     }

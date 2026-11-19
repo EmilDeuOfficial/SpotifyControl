@@ -28,7 +28,9 @@ public enum LyricsAnimation {
     SWING("Swing"),
     SHAKE("Shake"),
     WAVE("Wave"),
-    ZIGZAG("Zigzag");
+    ZIGZAG("Zigzag"),
+    LETTERS("Letters"),
+    SPARKS("Sparks");
 
     /**
      * Where a word is while it moves.
@@ -108,7 +110,74 @@ public enum LyricsAnimation {
             case SHAKE -> Pose.slid((float) (Math.sin(h * 40.0) * 0.25 * h));
             case WAVE -> Pose.lifted((float) (Math.sin(h * 9.0) * 0.45 * h));
             case ZIGZAG -> new Pose(1.0f, -way * 0.6f * h, (float) (Math.sin(h * 8.0) * 1.2 * h), 0.0f, 0.0f);
+            // The letters move on their own, see letter(). The word as a whole stays where it is.
+            case LETTERS -> Pose.REST;
+            // The sparks are particles, which the world and the preview add themselves. The word pops.
+            case SPARKS -> Pose.scaled(out ? 1.0f - h : overshoot(shown));
         };
+    }
+
+    /**
+     * The shortest time, in milliseconds, this animation is run over. A display entity is only told
+     * where to be once per game tick, twenty times a second, and moves in a straight line between those
+     * points. A quick spring or wobble has too few of them and comes out as a jitter, so the lively
+     * animations are stretched to a length where every swing is drawn from enough points.
+     */
+    public int minMillis() {
+        return switch (this) {
+            case FADE -> 0;
+            case GROW, ZOOM, RISE, DROP, SLIDE, SWOOP -> 300;
+            case POP, SPARKS -> 450;
+            case ROLL, SPIN, FLIP -> 500;
+            case SHAKE, ZIGZAG -> 700;
+            case BOUNCE, SWING, WAVE -> 800;
+            case ELASTIC -> 900;
+            case LETTERS -> 900;
+        };
+    }
+
+    /** Whether every letter of a word moves on its own, so a word is made of one display per letter. */
+    public boolean perLetter() {
+        return this == LETTERS;
+    }
+
+    /** Whether the word throws sparks, which are particles. */
+    public boolean sparks() {
+        return this == SPARKS;
+    }
+
+    /** One letter of a word: where it is and how much of it is hidden, 0 to 1. */
+    public record LetterState(Pose pose, float hidden) {
+    }
+
+    /**
+     * The state of letter {@code index} of {@code count} while the word comes or goes. The letters
+     * follow each other, the first one first, and each flies in from or off to a direction of its
+     * own, turning and growing or shrinking on the way.
+     *
+     * @param rawHidden how far the word is from there, 0 to 1, not eased
+     */
+    public static LetterState letter(boolean out, float rawHidden, int index, int count) {
+        float delay = count <= 1 ? 0.0f : 0.55f * index / (count - 1);
+        float own;
+        if (out) {
+            own = (rawHidden - delay) / 0.45f;
+        } else {
+            own = 1.0f - ((1.0f - rawHidden) - delay) / 0.45f;
+        }
+        float e = ease(own);
+        float rx = random(index * 3 + 1);
+        float ry = random(index * 3 + 2);
+        float rz = random(index * 3 + 3);
+        Pose pose = new Pose(Math.max(0.05f, 1.0f - 0.6f * e), ry * 3.0f * e, rx * 4.0f * e,
+                (float) (rz * Math.PI * e), 0.0f);
+        return new LetterState(pose, e);
+    }
+
+    /** A fixed pseudo random number in -1 to 1 for the given seed, so a letter always flies the same way. */
+    private static float random(int seed) {
+        double v = Math.sin(seed * 12.9898 + 4.1414) * 43758.5453;
+        return (float) ((v - Math.floor(v)) * 2.0 - 1.0);
     }
 
     /** Smooth start and end, the curve every fade and movement follows. */

@@ -204,8 +204,8 @@ public class CardGridView {
             // counts in. A radius is rasterized at twice itself and an icon is rounded up to an even
             // size, so asking the two separately let the disc grow on steps the triangle could not
             // take, and the mark appeared to shrink inside its own button on the way out.
-            int step = Anim.enabled() ? Anim.growSteps(hover, PLAY_STEPS) - press : PLAY_STEPS;
-            Theme.circle(graphics, buttonX, buttonY, PLAY_RADIUS_MIN + step * 2, Theme.GREEN_BRIGHT);
+            float step = Anim.enabled() ? Math.max(0.0f, Math.min(1.0f, hover)) * PLAY_STEPS - press : PLAY_STEPS;
+            Theme.circleExact(graphics, buttonX, buttonY, PLAY_RADIUS_MIN + step * 2.0f, Theme.GREEN_BRIGHT);
             Icons.play(graphics, buttonX + 1, buttonY, PLAY_ICON_MIN + step * Anim.ICON_STEP, Theme.BLACK);
         }
     }

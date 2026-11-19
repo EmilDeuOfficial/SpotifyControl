@@ -10,6 +10,7 @@ import de.emilo.spotifycontrol.gui.Anim;
 import de.emilo.spotifycontrol.gui.Theme;
 import de.emilo.spotifycontrol.config.ClientConfig;
 import de.emilo.spotifycontrol.lyrics.LyricsAnimation;
+import de.emilo.spotifycontrol.lyrics.LyricsColor;
 import de.emilo.spotifycontrol.lyrics.LyricsFont;
 import de.emilo.spotifycontrol.spotify.SpotifyAuth;
 import de.emilo.spotifycontrol.spotify.SpotifySession;
@@ -62,6 +63,10 @@ public class SettingsPanel {
     /** The list of fonts is longer, and its names wider, than the one of animations. */
     private static final int FONT_PICKER_SPAN = 7;
     private static final int CHIP_HEIGHT = 17;
+    /** A colour field takes this many ordinary rows. */
+    private static final int COLOR_SPAN = 4;
+    private static final int COLOR_FIELD_WIDTH = 120;
+    private static final int COLOR_BAR_WIDTH = 14;
 
     /** The wiki page that explains how to create the Spotify app and where its client ID is. */
     private static final String HELP_URL =
@@ -80,11 +85,28 @@ public class SettingsPanel {
 
     /** What a list of choices lets the user pick. */
     private enum PickerKind {
-        IN_ANIMATION, OUT_ANIMATION, FONT
+        IN_ANIMATION, OUT_ANIMATION, FONT, COLOR
     }
 
     private static int spanOf(PickerKind kind) {
         return kind == PickerKind.FONT ? FONT_PICKER_SPAN : PICKER_SPAN;
+    }
+
+    /** How many ordinary rows a row covers: a list of choices and a colour field are taller than one. */
+    private static int spanOfRow(Row row) {
+        if (row instanceof PickerRow listed) {
+            return spanOf(listed.kind());
+        }
+        return row instanceof ColorRow ? COLOR_SPAN : 1;
+    }
+
+    /**
+     * A field to pick a colour in, a square for saturation and brightness beside a bar for the hue.
+     * {@code which} is the colour of the setting it edits, 0 for the first and 1 for the second.
+     * It covers {@link #COLOR_SPAN} rows, the first of which is this one and the rest
+     * {@link PickerFiller}s.
+     */
+    private record ColorRow(String label, int which) implements Row {
     }
 
     /**
@@ -136,6 +158,9 @@ public class SettingsPanel {
     private int rowsY;
     private int boxesY;
     private int draggingSlider = -1;
+    /** The row of the colour field that is being dragged in, and which part of it: 0 square, 1 hue bar. */
+    private int draggingColor = -1;
+    private int draggingColorPart;
     private boolean capturingKey;
 
     public SettingsPanel() {
@@ -387,6 +412,12 @@ public class SettingsPanel {
                     ConfigManager.client().lyricsFont = value;
                     ConfigManager.saveClient();
                 });
+        addPicker("Lyrics colour", PickerKind.COLOR, () -> ConfigManager.client().lyricsColor,
+                value -> {
+                    ConfigManager.client().lyricsColor = value;
+                    ConfigManager.saveClient();
+                    syncColorRows();
+                });
         rows.add(new ToggleRow("Bold text", () -> ConfigManager.client().lyricsBold,
                 value -> {
                     ConfigManager.client().lyricsBold = value;
@@ -422,6 +453,16 @@ public class SettingsPanel {
                     ConfigManager.client().lyricsSeconds = value;
                     ConfigManager.saveClient();
                 }, 1, 30, 1, " s"));
+        rows.add(new ToggleRow("Visible through blocks", () -> ConfigManager.client().lyricsSeeThrough,
+                value -> {
+                    ConfigManager.client().lyricsSeeThrough = value;
+                    ConfigManager.saveClient();
+                }));
+        rows.add(new SliderRow("Sync offset", () -> ConfigManager.client().lyricsOffsetMillis,
+                value -> {
+                    ConfigManager.client().lyricsOffsetMillis = value;
+                    ConfigManager.saveClient();
+                }, -3000, 3000, 50, " ms"));
         rows.add(new SliderRow("Lyrics kept", () -> ConfigManager.client().lyricsKept,
                 value -> {
                     ConfigManager.client().lyricsKept = value;
@@ -479,6 +520,7 @@ public class SettingsPanel {
         }));
         rows.add(new InfoRow("Voice chat",
                 () -> SpotifyControl.voicechatPresent() ? "installed" : "not installed"));
+        syncColorRows();
     }
 
     private void ensureBoxes(int x, int y, int width) {
@@ -599,7 +641,7 @@ public class SettingsPanel {
         for (int index = 0; index < rows.size(); index++) {
             int rowY = rowsY + index * ROW_HEIGHT - offset;
             Row current = rows.get(index);
-            int span = current instanceof PickerRow listed ? spanOf(listed.kind()) : 1;
+            int span = spanOfRow(current);
             if (current instanceof PickerFiller || rowY + span * ROW_HEIGHT < rowsY || rowY > rowsY + viewHeight) {
                 continue;
             }
@@ -613,6 +655,10 @@ public class SettingsPanel {
                            int mouseY) {
         if (row instanceof PickerRow picker) {
             renderPicker(graphics, font, picker, index, x, y, width, mouseX, mouseY);
+            return;
+        }
+        if (row instanceof ColorRow field) {
+            renderColorField(graphics, font, field, x, y, width);
             return;
         }
         if (row instanceof HeaderRow header) {
@@ -706,6 +752,43 @@ public class SettingsPanel {
         }
     }
 
+    /**
+     * Opens the colour fields under the colour list for the custom choices and closes them for
+     * every other one, so the list only holds what the chosen colour can be adjusted with.
+     */
+    private void syncColorRows() {
+        for (int i = rows.size() - 1; i >= 0; i--) {
+            if (rows.get(i) instanceof ColorRow) {
+                rows.subList(i, Math.min(rows.size(), i + COLOR_SPAN)).clear();
+            }
+        }
+        int at = -1;
+        for (int i = 0; i < rows.size(); i++) {
+            if (rows.get(i) instanceof PickerRow picker && picker.kind() == PickerKind.COLOR) {
+                at = i + spanOf(PickerKind.COLOR);
+            }
+        }
+        if (at < 0) {
+            return;
+        }
+        LyricsColor chosen = LyricsColor.of(ConfigManager.client().lyricsColor);
+        List<Row> fields = new ArrayList<>();
+        if (chosen == LyricsColor.CUSTOM || chosen == LyricsColor.CUSTOM_GRADIENT) {
+            addColorField(fields, new ColorRow(chosen == LyricsColor.CUSTOM ? "Custom colour" : "Gradient start", 0));
+        }
+        if (chosen == LyricsColor.CUSTOM_GRADIENT) {
+            addColorField(fields, new ColorRow("Gradient end", 1));
+        }
+        rows.addAll(at, fields);
+    }
+
+    private static void addColorField(List<Row> target, ColorRow row) {
+        target.add(row);
+        for (int slot = 1; slot < COLOR_SPAN; slot++) {
+            target.add(new PickerFiller(slot));
+        }
+    }
+
     private void addPicker(String label, PickerKind kind, Supplier<String> get, Consumer<String> set) {
         rows.add(new PickerRow(label, kind, get, set));
         for (int slot = 1; slot < spanOf(kind); slot++) {
@@ -714,27 +797,41 @@ public class SettingsPanel {
     }
 
     private static String[] pickerKeys(PickerKind kind) {
+        String[] keys;
         if (kind == PickerKind.FONT) {
             LyricsFont[] fonts = LyricsFont.values();
-            String[] keys = new String[fonts.length];
+            keys = new String[fonts.length];
             for (int i = 0; i < fonts.length; i++) {
                 keys[i] = fonts[i].name();
             }
-            return keys;
-        }
-        LyricsAnimation[] animations = LyricsAnimation.values();
-        String[] keys = new String[animations.length];
-        for (int i = 0; i < animations.length; i++) {
-            keys[i] = animations[i].name();
+        } else if (kind == PickerKind.COLOR) {
+            LyricsColor[] colors = LyricsColor.values();
+            keys = new String[colors.length];
+            for (int i = 0; i < colors.length; i++) {
+                keys[i] = colors[i].name();
+            }
+        } else {
+            LyricsAnimation[] animations = LyricsAnimation.values();
+            keys = new String[animations.length];
+            for (int i = 0; i < animations.length; i++) {
+                keys[i] = animations[i].name();
+            }
         }
         return keys;
     }
 
-    /** The name of a choice. A font is written in the font it stands for, so the list is a preview too. */
+    /**
+     * The name of a choice. A font is written in the font it stands for and a colour in its own
+     * colours, so the list is a preview too.
+     */
     private static Component chipText(PickerKind kind, String key) {
         if (kind == PickerKind.FONT) {
             LyricsFont font = LyricsFont.of(key);
             return Component.literal(font.label()).withStyle(font.apply(Style.EMPTY));
+        }
+        if (kind == PickerKind.COLOR) {
+            LyricsColor color = LyricsColor.of(key);
+            return LyricsColor.build(color.label(), color.stops(ConfigManager.client(), 0.0f), Style.EMPTY);
         }
         return Component.literal(LyricsAnimation.of(key).label());
     }
@@ -792,66 +889,242 @@ public class SettingsPanel {
 
         int preview = previewWidth(width);
         if (preview > 0) {
-            renderPreview(graphics, font, kind, hoveredKey != null ? hoveredKey : selected,
+            renderPreview(graphics, font, index, kind, hoveredKey != null ? hoveredKey : selected,
                     x + width - 20 - preview, y + 24, preview, blockHeight - 28);
         }
     }
 
+    /** What each preview showed last, and since when, so it starts again from the beginning on any change. */
+    private static final java.util.Map<Integer, String> PREVIEW_SHOWN = new java.util.HashMap<>();
+    private static final java.util.Map<Integer, Long> PREVIEW_SINCE = new java.util.HashMap<>();
+
     /**
      * Shows a word the way the world will show it: for an animation it appears, stays and goes
      * on a loop, with the fade times from the settings and the choice that is under the cursor in
-     * place of the saved one; for a font it is a sample in that font.
+     * place of the saved one; for a font or a colour it is a sample in that font or colour. The
+     * loop starts over whenever anything it shows changes, so a changed setting is seen at once
+     * from its first moment instead of wherever the loop happened to be.
      */
-    private static void renderPreview(GuiGraphics graphics, Font font, PickerKind kind, String key, int px, int py,
-                                      int w, int h) {
+    private static void renderPreview(GuiGraphics graphics, Font font, int index, PickerKind kind, String key,
+                                      int px, int py, int w, int h) {
         ClientConfig config = ConfigManager.client();
         Theme.rounded(graphics, px, py, w, h, 6, Theme.alpha(Theme.BLACK, 0.45f));
 
         LyricsAnimation in = LyricsAnimation.of(config.lyricsInStyle);
         LyricsAnimation out = LyricsAnimation.of(config.lyricsOutStyle);
         LyricsFont chosen = LyricsFont.of(config.lyricsFont);
+        LyricsColor color = LyricsColor.of(config.lyricsColor);
         if (kind == PickerKind.IN_ANIMATION) {
             in = LyricsAnimation.of(key);
         } else if (kind == PickerKind.OUT_ANIMATION) {
             out = LyricsAnimation.of(key);
+        } else if (kind == PickerKind.COLOR) {
+            color = LyricsColor.of(key);
         } else {
             chosen = LyricsFont.of(key);
         }
-        Component word = Component.literal(kind == PickerKind.FONT ? "Sing along" : "Lyrics")
-                .withStyle(chosen.apply(Style.EMPTY.withBold(config.lyricsBold)));
 
-        float hidden = 0.0f;
-        LyricsAnimation.Pose pose = LyricsAnimation.Pose.REST;
-        if (kind != PickerKind.FONT) {
+        String shown = in + "|" + out + "|" + chosen + "|" + color + "|" + config.lyricsBold + "|"
+                + config.lyricsFadeInMillis + "|" + config.lyricsFadeOutMillis + "|" + config.lyricsCustom1Hue + "|"
+                + config.lyricsCustom1Saturation + "|" + config.lyricsCustom1Brightness + "|" + config.lyricsCustom2Hue
+                + "|" + config.lyricsCustom2Saturation + "|" + config.lyricsCustom2Brightness;
+        long now = System.currentTimeMillis();
+        if (!shown.equals(PREVIEW_SHOWN.get(index))) {
+            PREVIEW_SHOWN.put(index, shown);
+            PREVIEW_SINCE.put(index, now);
+        }
+        long since = now - PREVIEW_SINCE.getOrDefault(index, now);
+
+        boolean animated = kind == PickerKind.IN_ANIMATION || kind == PickerKind.OUT_ANIMATION;
+        String sample = kind == PickerKind.FONT ? "Sing along" : "Lyrics";
+        int[] stops = color.stops(config, 0.0f);
+        Style base = chosen.apply(Style.EMPTY.withBold(config.lyricsBold));
+        Component word = LyricsColor.build(sample, stops, base);
+
+        float raw = 0.0f;
+        LyricsAnimation active = null;
+        boolean leaving = false;
+        if (animated) {
             // Never shorter than a third of a second, so even a time of 0 can be seen to do something.
-            int inMs = Math.max(350, config.lyricsFadeInMillis);
-            int outMs = Math.max(350, config.lyricsFadeOutMillis);
-            int hold = 900;
-            int gap = 450;
-            long t = System.currentTimeMillis() % (inMs + hold + outMs + gap);
-            if (t < inMs) {
-                hidden = 1.0f - LyricsAnimation.ease((float) t / inMs);
-                pose = in.pose(false, hidden);
-            } else if (t >= inMs + hold) {
-                hidden = t < inMs + hold + outMs ? LyricsAnimation.ease((float) (t - inMs - hold) / outMs) : 1.0f;
-                pose = out.pose(true, hidden);
+            int inMs = Math.max(Math.max(350, config.lyricsFadeInMillis), in.minMillis());
+            int outMs = Math.max(Math.max(350, config.lyricsFadeOutMillis), out.minMillis());
+            if (kind == PickerKind.IN_ANIMATION) {
+                // Only the way in: the word comes, stays a moment, is cleared away and comes again.
+                int hold = 1100;
+                int gap = 400;
+                long t = since % (inMs + hold + gap);
+                active = in;
+                if (t < inMs) {
+                    raw = 1.0f - (float) t / inMs;
+                } else if (t >= inMs + hold) {
+                    raw = 1.0f;
+                }
+            } else {
+                // Only the way out: the word stands there, goes, and is put back for the next round.
+                int lead = 700;
+                int gap = 450;
+                long t = since % (lead + outMs + gap);
+                if (t >= lead) {
+                    raw = t < lead + outMs ? (float) (t - lead) / outMs : 1.0f;
+                    active = out;
+                    leaving = true;
+                }
             }
         }
+        float hidden = LyricsAnimation.ease(raw);
+        LyricsAnimation.Pose pose = active == null ? LyricsAnimation.Pose.REST : active.pose(leaving, hidden);
+        boolean perLetter = active != null && active.perLetter();
         float alpha = 1.0f - hidden;
-        if (alpha < 0.06f) {
+        if (!perLetter && alpha < 0.06f && !(active != null && active.sparks())) {
             return;
         }
         int textWidth = Math.max(1, font.width(word));
-        float scale = Math.min(kind == PickerKind.FONT ? 1.6f : 2.2f, (w - 12.0f) / textWidth);
+        float scale = Math.min(animated ? 2.2f : 1.6f, (w - 12.0f) / textWidth);
         float lineHeight = 8.0f * scale;
-        float flip = Math.max(0.03f, (float) Math.abs(Math.cos(pose.flip())));
         Theme.scissor(graphics, px, py, px + w, py + h);
-        Platform.pushTransform(graphics, px + w / 2.0f + pose.slide() * lineHeight,
-                py + h / 2.0f - pose.lift() * lineHeight, pose.spin(),
-                scale * pose.scale() * flip, scale * pose.scale());
-        Platform.drawText(graphics, font, word, -textWidth / 2, -4, Theme.alpha(Theme.accent(), alpha), true);
-        Platform.popMatrix(graphics);
+        if (perLetter) {
+            // One letter at a time, each in its own place of the animation, as the world draws it.
+            int[] points = sample.codePoints().toArray();
+            Component[] letters = new Component[points.length];
+            int[] widths = new int[points.length];
+            for (int i = 0; i < points.length; i++) {
+                letters[i] = LyricsColor.build(new String(Character.toChars(points[i])),
+                        new int[] {LyricsColor.sample(stops, (float) i / (points.length - 1))}, base);
+                widths[i] = font.width(letters[i]);
+            }
+            int before = 0;
+            for (int i = 0; i < points.length; i++) {
+                LyricsAnimation.LetterState state = LyricsAnimation.letter(leaving, raw, i, points.length);
+                float letterAlpha = 1.0f - state.hidden();
+                if (letterAlpha >= 0.06f) {
+                    LyricsAnimation.Pose letterPose = state.pose();
+                    float centre = (before + widths[i] / 2.0f - textWidth / 2.0f) * scale;
+                    float flip = Math.max(0.03f, (float) Math.abs(Math.cos(letterPose.flip())));
+                    Platform.pushTransform(graphics, px + w / 2.0f + centre + letterPose.slide() * lineHeight,
+                            py + h / 2.0f - letterPose.lift() * lineHeight, letterPose.spin(),
+                            scale * letterPose.scale() * flip, scale * letterPose.scale());
+                    Platform.drawText(graphics, font, letters[i], -widths[i] / 2, -4,
+                            Theme.alpha(0xFFFFFFFF, letterAlpha), true);
+                    Platform.popMatrix(graphics);
+                }
+                before += widths[i];
+            }
+        } else if (alpha >= 0.06f) {
+            float flip = Math.max(0.03f, (float) Math.abs(Math.cos(pose.flip())));
+            Platform.pushTransform(graphics, px + w / 2.0f + pose.slide() * lineHeight,
+                    py + h / 2.0f - pose.lift() * lineHeight, pose.spin(),
+                    scale * pose.scale() * flip, scale * pose.scale());
+            // The word carries its own colours, so what is passed here only sets how see-through it is.
+            Platform.drawText(graphics, font, word, -textWidth / 2, -4, Theme.alpha(0xFFFFFFFF, alpha), true);
+            Platform.popMatrix(graphics);
+        }
+        if (active != null && active.sparks()) {
+            // Sparks fly out from the word as it appears and as it goes, drawn as little squares.
+            float burst = leaving ? raw : 1.0f - raw;
+            float fade = 1.0f - burst;
+            for (int k = 0; k < 18; k++) {
+                double angle = k * 2.399963 + k * 0.31;
+                double reach = (0.25 + 0.75 * ((k * 37) % 11) / 10.0) * burst;
+                int sx = (int) (px + w / 2.0 + Math.cos(angle) * reach * w * 0.48);
+                int sy = (int) (py + h / 2.0 + Math.sin(angle) * reach * h * 0.5);
+                graphics.fill(sx, sy, sx + 2, sy + 2, Theme.alpha(0xFFFFFFFF, Math.max(0.0f, fade)));
+            }
+        }
         Theme.endScissor(graphics);
+    }
+
+    /** Hue in degrees, saturation and brightness in percent of the colour a field edits. */
+    private static int[] hsvOf(ClientConfig config, int which) {
+        return which == 0
+                ? new int[] {config.lyricsCustom1Hue, config.lyricsCustom1Saturation, config.lyricsCustom1Brightness}
+                : new int[] {config.lyricsCustom2Hue, config.lyricsCustom2Saturation, config.lyricsCustom2Brightness};
+    }
+
+    private static void setHsv(ClientConfig config, int which, int hue, int saturation, int brightness) {
+        if (which == 0) {
+            config.lyricsCustom1Hue = hue;
+            config.lyricsCustom1Saturation = saturation;
+            config.lyricsCustom1Brightness = brightness;
+        } else {
+            config.lyricsCustom2Hue = hue;
+            config.lyricsCustom2Saturation = saturation;
+            config.lyricsCustom2Brightness = brightness;
+        }
+    }
+
+    /** Where the parts of a colour field sit: the square as x, y, w, h, then the hue bar as x, y, w, h. */
+    private static int[] colorField(int x, int y) {
+        int height = COLOR_SPAN * ROW_HEIGHT - 6 - 28;
+        int squareX = x + 10;
+        int squareY = y + 24;
+        return new int[] {squareX, squareY, COLOR_FIELD_WIDTH, height,
+                squareX + COLOR_FIELD_WIDTH + 8, squareY, COLOR_BAR_WIDTH, height};
+    }
+
+    private void renderColorField(GuiGraphics graphics, Font font, ColorRow row, int x, int y, int width) {
+        ClientConfig config = ConfigManager.client();
+        int blockHeight = COLOR_SPAN * ROW_HEIGHT - 6;
+        Theme.rounded(graphics, x + 4, y + 2, width - 14, blockHeight, 6, Theme.alpha(Theme.SURFACE_HOVER, 0.55f));
+        Platform.drawString(graphics, font, row.label(), x + 10, y + 8, Theme.TEXT, false);
+        int[] f = colorField(x, y);
+        int[] hsv = hsvOf(config, row.which());
+
+        // The square is the colour at full strength along the top right and white and black beside
+        // it, drawn as small cells because that is what the interface can paint without a texture.
+        int columns = 30;
+        int lines = 17;
+        for (int line = 0; line < lines; line++) {
+            int y0 = f[1] + line * f[3] / lines;
+            int y1 = f[1] + (line + 1) * f[3] / lines;
+            int brightness = Math.round(100.0f * (1.0f - (float) line / (lines - 1)));
+            for (int column = 0; column < columns; column++) {
+                int x0 = f[0] + column * f[2] / columns;
+                int x1 = f[0] + (column + 1) * f[2] / columns;
+                int saturation = Math.round(100.0f * column / (columns - 1));
+                graphics.fill(x0, y0, x1, y1, 0xFF000000 | LyricsColor.hsv(hsv[0], saturation, brightness));
+            }
+        }
+        int steps = 24;
+        for (int step = 0; step < steps; step++) {
+            int y0 = f[5] + step * f[7] / steps;
+            int y1 = f[5] + (step + 1) * f[7] / steps;
+            graphics.fill(f[4], y0, f[4] + f[6], y1, 0xFF000000 | LyricsColor.hsv(step * 360 / steps, 100, 100));
+        }
+
+        int picked = 0xFF000000 | LyricsColor.hsv(hsv[0], hsv[1], hsv[2]);
+        int markX = f[0] + Math.round((f[2] - 1) * hsv[1] / 100.0f);
+        int markY = f[1] + Math.round((f[3] - 1) * (1.0f - hsv[2] / 100.0f));
+        graphics.fill(markX - 3, markY - 3, markX + 4, markY + 4, Theme.TEXT);
+        graphics.fill(markX - 2, markY - 2, markX + 3, markY + 3, picked);
+        int hueY = f[5] + Math.round((f[7] - 1) * hsv[0] / 360.0f);
+        graphics.fill(f[4] - 2, hueY - 1, f[4] + f[6] + 2, hueY + 2, Theme.TEXT);
+
+        int swatchX = f[4] + f[6] + 14;
+        Theme.rounded(graphics, swatchX, f[1], 52, 24, 6, picked);
+        String hex = String.format(java.util.Locale.ROOT, "#%06X", picked & 0xFFFFFF);
+        Platform.drawString(graphics, font, hex, swatchX, f[1] + 32, Theme.TEXT_MUTED, false);
+    }
+
+    /** Moves the colour of a field to where the cursor is, in the part that was grabbed. */
+    private void applyColor(int index, int part, double mouseX, double mouseY) {
+        if (index < 0 || index >= rows.size() || !(rows.get(index) instanceof ColorRow row)) {
+            return;
+        }
+        int rowTop = rowsY + index * ROW_HEIGHT - scroll.offset();
+        int[] f = colorField(panelX, rowTop);
+        ClientConfig config = ConfigManager.client();
+        int[] hsv = hsvOf(config, row.which());
+        if (part == 0) {
+            double saturation = (mouseX - f[0]) / (double) (f[2] - 1);
+            double brightness = 1.0D - (mouseY - f[1]) / (double) (f[3] - 1);
+            hsv[1] = (int) Math.round(100.0D * Math.max(0.0D, Math.min(1.0D, saturation)));
+            hsv[2] = (int) Math.round(100.0D * Math.max(0.0D, Math.min(1.0D, brightness)));
+        } else {
+            double hue = (mouseY - f[5]) / (double) (f[7] - 1);
+            hsv[0] = (int) Math.round(360.0D * Math.max(0.0D, Math.min(1.0D, hue)));
+        }
+        setHsv(config, row.which(), hsv[0], hsv[1], hsv[2]);
+        ConfigManager.saveClient();
     }
 
     private void clickPicker(PickerRow picker, int index, int mouseX, int mouseY) {
@@ -914,6 +1187,20 @@ public class SettingsPanel {
             clickPicker(picker, index, (int) mouseX, (int) mouseY);
             return true;
         }
+        if (row instanceof ColorRow) {
+            int[] f = colorField(panelX, rowsY + index * ROW_HEIGHT - scroll.offset());
+            if (Theme.hovered((int) mouseX, (int) mouseY, f[0], f[1], f[2], f[3])) {
+                draggingColor = index;
+                draggingColorPart = 0;
+            } else if (Theme.hovered((int) mouseX, (int) mouseY, f[4] - 4, f[5], f[6] + 8, f[7])) {
+                draggingColor = index;
+                draggingColorPart = 1;
+            }
+            if (draggingColor >= 0) {
+                applyColor(draggingColor, draggingColorPart, mouseX, mouseY);
+            }
+            return true;
+        }
         if (row instanceof HeaderRow) {
             return true;
         }
@@ -963,7 +1250,11 @@ public class SettingsPanel {
         }
     }
 
-    public boolean mouseDragged(double mouseX) {
+    public boolean mouseDragged(double mouseX, double mouseY) {
+        if (draggingColor >= 0) {
+            applyColor(draggingColor, draggingColorPart, mouseX, mouseY);
+            return true;
+        }
         if (draggingSlider < 0 || draggingSlider >= rows.size()) {
             return false;
         }
@@ -976,6 +1267,7 @@ public class SettingsPanel {
 
     public void mouseReleased() {
         draggingSlider = -1;
+        draggingColor = -1;
     }
 
     /**

@@ -7,5 +7,7 @@
   "key.spotifycontrol.previous": "Previous track",
   "key.spotifycontrol.volume_up": "Volume up",
   "key.spotifycontrol.volume_down": "Volume down",
-  "key.spotifycontrol.toggle_hud": "Toggle now-playing HUD"
+  "key.spotifycontrol.toggle_hud": "Toggle now-playing HUD",
+  "key.spotifycontrol.lyrics_earlier": "Lyrics earlier (this song)",
+  "key.spotifycontrol.lyrics_later": "Lyrics later (this song)"
 }

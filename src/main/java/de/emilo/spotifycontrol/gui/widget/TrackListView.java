@@ -432,7 +432,7 @@ public class TrackListView {
                     Theme.alpha(arriving(playing ? Theme.GREEN : Theme.TEXT_DIM, entry), 1.0f - hover), false);
         }
         if (icon > 0.0f) {
-            Icons.play(graphics, numberX, centerY, Anim.grownSize(8, hover, Anim.ICON_STEP),
+            Icons.play(graphics, numberX, centerY, Anim.grownExact(8.0f, hover, Anim.ICON_STEP),
                     Theme.alpha(Theme.TEXT, Math.min(icon, rasterEntry)));
         }
 
@@ -485,16 +485,16 @@ public class TrackListView {
             int heartColor = liked ? Theme.GREEN
                     : Theme.mix(unavailable ? Theme.TEXT_DIM : Theme.TEXT_MUTED, Theme.GREEN_BRIGHT,
                     stepped(likeHover));
-            int heartSize = Anim.grownSize(10, likeHover, Anim.ICON_STEP)
-                    - Anim.iconPress("row.like:" + index);
+            float heartSize = Anim.grownExact(10.0f, likeHover, Anim.ICON_STEP)
+                    - Anim.pressExact("row.like:" + index, Anim.ICON_STEP);
             Icons.heart(graphics, likeX, centerY, heartSize, liked, Theme.alpha(heartColor, rasterEntry));
         }
 
         if (hover > 0.0f) {
             boolean menuHovered = active && Theme.hovered(mouseX, mouseY, likeX + 6, y + 8, 14, 14);
             float menuHover = Anim.hover("row.plus:" + index, menuHovered);
-            int plusSize = Anim.grownSize(8, menuHover, Anim.ICON_STEP)
-                    - Anim.iconPress("row.plus:" + index);
+            float plusSize = Anim.grownExact(8.0f, menuHover, Anim.ICON_STEP)
+                    - Anim.pressExact("row.plus:" + index, Anim.ICON_STEP);
             Icons.plus(graphics, likeX + 13, centerY, plusSize,
                     Theme.alpha(Theme.mix(Theme.TEXT_MUTED, Theme.TEXT, stepped(menuHover)),
                             Math.min(icon, rasterEntry)));

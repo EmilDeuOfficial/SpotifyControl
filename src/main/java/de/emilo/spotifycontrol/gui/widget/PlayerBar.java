@@ -195,11 +195,11 @@ public class PlayerBar {
         // asking the two separately let them cross their thresholds a frame or two apart and the
         // button came apart while it moved.
         boolean animated = Anim.enabled();
-        int playStep = animated ? Anim.growSteps(playHover, 1) - Anim.pressStep("bar.play") : 0;
-        int playRadius = (animated || !playHovered ? 13 : 14) + playStep;
-        int pauseSize = 12 + playStep * Anim.ICON_STEP;
-        int playSize = 12 + playStep * Anim.ICON_STEP;
-        Theme.circle(graphics, centerX, controlsY, playRadius, Theme.TEXT);
+        float playGrow = animated ? Anim.grownExact(0.0f, playHover, 1.0f) - Anim.pressExact("bar.play", 1.0f) : 0.0f;
+        float playRadius = (animated || !playHovered ? 13.0f : 14.0f) + playGrow;
+        float pauseSize = 12.0f + playGrow * Anim.ICON_STEP;
+        float playSize = 12.0f + playGrow * Anim.ICON_STEP;
+        Theme.circleExact(graphics, centerX, controlsY, playRadius, Theme.TEXT);
         // Play and pause trade places by alpha, so the button does not blink when playback is
         // toggled. Whichever of the two has faded out is skipped, which is also what keeps them off
         // each other once the crossfade is over.
@@ -314,7 +314,7 @@ public class PlayerBar {
 
     /** What an icon button paints, at the colour and the size it is handed. */
     private interface Glyph {
-        void draw(int color, int size);
+        void draw(int color, float size);
     }
 
     /**
@@ -328,7 +328,8 @@ public class PlayerBar {
                                    Glyph glyph) {
         float amount = Anim.hover(id, hovered);
         int color = Anim.mix(idle, active, amount);
-        glyph.draw(color, Math.max(2, Anim.grownSize(size, amount, Anim.ICON_STEP) - Anim.iconPress(id)));
+        glyph.draw(color, Math.max(2.0f, Anim.grownExact(size, amount, Anim.ICON_STEP)
+                - Anim.pressExact(id, Anim.ICON_STEP)));
     }
 
     /**

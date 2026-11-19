@@ -11,17 +11,23 @@ import de.emilo.spotifycontrol.platform.Platform;
 import de.emilo.spotifycontrol.spotify.model.PlaybackState;
 import de.emilo.spotifycontrol.spotify.model.Track;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.Style;
 import net.minecraft.util.Brightness;
 import net.minecraft.world.entity.Display;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.phys.Vec3;
+import org.joml.Matrix4f;
 import org.joml.Quaternionf;
+import org.joml.Vector4f;
 import org.joml.Vector3f;
 
 import java.util.ArrayList;
@@ -55,6 +61,8 @@ public final class WorldLyrics {
     private static final double REFERENCE_DISTANCE = 6.0;
     /** Most pieces that may be in the world at once, whatever the settings say. */
     private static final int HARD_LIMIT = 160;
+    /** Most display entities in the world at once, counting both sides of every letter and word. */
+    private static final int MAX_ENTITIES = 700;
     /** Largest sideways tilt of a piece, in degrees either way. Small enough to read easily. */
     private static final double MAX_ROLL_DEGREES = 10.0;
     /** Largest lean of a piece towards or away from the player, in degrees either way. */
@@ -97,42 +105,103 @@ public final class WorldLyrics {
     }
 
     /**
-     * One piece in the world: the display that faces the player, its twin that faces the other way
-     * so the words can be read from behind as well, and the box the text covers.
+     * One part of a piece: the display that faces the player and its twin that faces the other way,
+     * so the words can be read from behind as well. A whole word is one part, a word whose letters
+     * move on their own is one part per letter, {@code offset} blocks from the middle of the word.
+     * A piece that is drawn over the picture has no displays, only its text and where that sits.
      */
-    private static final class Placed {
+    private static final class Part {
         final Display.TextDisplay front;
         final Display.TextDisplay back;
+        final double offset;
+        final Component text;
+        /** Width of the text in font pixels, and how far its middle is from the middle of the word. */
+        final int width;
+        final double offsetPixels;
+        /** The pose last applied, so a transformation is only sent when the part has moved. */
+        LyricsAnimation.Pose lastPose = LyricsAnimation.Pose.REST;
+        int lastAlpha = -1;
+
+        Part(Display.TextDisplay front, Display.TextDisplay back, double offset, Component text, int width,
+             double offsetPixels) {
+            this.front = front;
+            this.back = back;
+            this.offset = offset;
+            this.text = text;
+            this.width = width;
+            this.offsetPixels = offsetPixels;
+        }
+    }
+
+    /** A bit of light flying off a word that is drawn over the picture. Places in font pixels, speeds per second. */
+    private static final class Fleck {
+        final float x;
+        final float y;
+        final float vx;
+        final float vy;
+        float age;
+        final float life;
+
+        Fleck(float x, float y, float vx, float vy, float life) {
+            this.x = x;
+            this.y = y;
+            this.vx = vx;
+            this.vy = vy;
+            this.life = life;
+        }
+    }
+
+    /** One piece: its parts, and the box the text covers. */
+    private static final class Placed {
+        final List<Part> parts;
         final BlockPos pos;
         final Vec3 center;
         final double halfWidth;
         final double halfHeight;
+        /** The direction the word runs in, flat on the ground, for the sparks. */
+        final double axisX;
+        final double axisZ;
         final long endMs;
         final float scale;
         final float pitch;
         final float roll;
         final double textHalf;
-        /** The pose last applied, so a transformation is only sent when the word has moved. */
-        LyricsAnimation.Pose lastPose = LyricsAnimation.Pose.REST;
-        int lastAlpha = -1;
+        /** Drawn over the picture instead of as displays, so nothing in the world can be in front of it. */
+        final boolean overlay;
+        /** Width of the whole word in font pixels. */
+        final double widthPixels;
+        final List<Fleck> flecks = new ArrayList<>();
         int age;
         /** Ticks into the fade out, or -1 while the piece is still on. */
         int fading = -1;
 
-        Placed(Display.TextDisplay front, Display.TextDisplay back, BlockPos pos, Spot spot, float pitch,
-               long endMs) {
+        Placed(List<Part> parts, BlockPos pos, Spot spot, float pitch, Vec3 axis, long endMs, boolean overlay,
+               double widthPixels) {
             Box box = spot.box();
+            this.parts = parts;
             this.scale = spot.scale();
             this.pitch = pitch;
             this.roll = spot.roll();
             this.textHalf = spot.textHalfHeight();
-            this.front = front;
-            this.back = back;
             this.pos = pos;
             this.center = box.center();
             this.halfWidth = box.halfWidth();
             this.halfHeight = box.halfHeight();
+            this.axisX = axis.x;
+            this.axisZ = axis.z;
             this.endMs = endMs;
+            this.overlay = overlay;
+            this.widthPixels = widthPixels;
+        }
+
+        int entities() {
+            int total = 0;
+            for (Part part : parts) {
+                if (part.front != null) {
+                    total += 2;
+                }
+            }
+            return total;
         }
     }
 
@@ -151,11 +220,15 @@ public final class WorldLyrics {
     private record View(Vec3 eye, Vec3 forward, Vec3 right, Vec3 up) {
 
         static View of(LocalPlayer player) {
-            double yaw = Math.toRadians(player.getYRot());
-            double pitch = Math.toRadians(player.getXRot());
+            return of(player.getEyePosition(), player.getYRot(), player.getXRot());
+        }
+
+        static View of(Vec3 eye, float yawDegrees, float pitchDegrees) {
+            double yaw = Math.toRadians(yawDegrees);
+            double pitch = Math.toRadians(pitchDegrees);
             Vec3 forward = new Vec3(-Math.sin(yaw) * Math.cos(pitch), -Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch));
             Vec3 right = new Vec3(-Math.cos(yaw), 0.0, -Math.sin(yaw));
-            return new View(player.getEyePosition(), forward, right, right.cross(forward));
+            return new View(eye, forward, right, right.cross(forward));
         }
     }
 
@@ -164,8 +237,6 @@ public final class WorldLyrics {
     private static final Random random = new Random();
     private static int nextEntityId = -2_000_000;
     private static int spawnCount;
-    /** When the last game tick ran, so the frames in between can tell how far into the next one they are. */
-    private static long lastTickNanos = System.nanoTime();
 
     private static String trackUri = "";
     private static volatile String loadedUri = "";
@@ -174,6 +245,18 @@ public final class WorldLyrics {
     private static int cursor = -1;
     private static long lastProgress;
     private static ClientLevel level;
+    private static long lastTickNanos;
+    private static long lastFrameNanos;
+    /** How the pieces are shown: 0 as displays, 1 drawn over the picture. */
+    private static int shownMode;
+    /** What the game rendered the world with last frame, so the words drawn over it sit where the world is. */
+    private static Matrix4f capturedClip;
+    private static Vec3 capturedPosition = Vec3.ZERO;
+    private static float capturedProjection;
+    private static long capturedNanos;
+    /** The field of view change of sprinting and the like, for the versions that do not hand over the matrices. */
+    private static float fovTarget = 1.0f;
+    private static float fovModifier = 1.0f;
 
     private WorldLyrics() {
     }
@@ -197,10 +280,18 @@ public final class WorldLyrics {
         if (level == null || player == null) {
             return;
         }
+        lastTickNanos = System.nanoTime();
+        int mode = config.lyricsSeeThrough ? 1 : 0;
+        if (mode != shownMode) {
+            // What is there goes the way it came, what comes next is shown the new way.
+            shownMode = mode;
+            fadeAll();
+        }
+        fovTarget = fovTargetOf(client, player);
 
         PlaybackState playback = ClientState.session().playback();
         Track track = playback.track();
-        long progress = playback.progressMs();
+        long progress = playback.progressMs() + config.lyricsOffsetMillis + trackOffset(config, track.uri());
         if (!track.uri().equals(trackUri) || loadedWordsPerPiece != config.lyricsWordsPerPiece) {
             trackUri = track.uri();
             loadedWordsPerPiece = config.lyricsWordsPerPiece;
@@ -238,6 +329,34 @@ public final class WorldLyrics {
         animate(View.of(player), progress);
     }
 
+    /** The sync offset of one song, set with the lyrics keys. */
+    public static int trackOffset(ClientConfig config, String uri) {
+        Integer offset = config.lyricsTrackOffsets == null ? null : config.lyricsTrackOffsets.get(uri);
+        return offset == null ? 0 : offset;
+    }
+
+    /** Moves the lyrics of the playing song by {@code delta} milliseconds, earlier when positive, and remembers it. */
+    public static int shiftTrackOffset(String uri, int delta) {
+        ClientConfig config = ConfigManager.client();
+        if (uri == null || uri.isEmpty()) {
+            return 0;
+        }
+        if (config.lyricsTrackOffsets == null) {
+            config.lyricsTrackOffsets = new java.util.LinkedHashMap<>();
+        }
+        int value = trackOffset(config, uri) + delta;
+        config.lyricsTrackOffsets.remove(uri);
+        if (value != 0) {
+            config.lyricsTrackOffsets.put(uri, value);
+        }
+        // Songs that have not been played for a long time make room, the file must not grow for ever.
+        while (config.lyricsTrackOffsets.size() > 300) {
+            config.lyricsTrackOffsets.remove(config.lyricsTrackOffsets.keySet().iterator().next());
+        }
+        ConfigManager.saveClient();
+        return value;
+    }
+
     /** Removes every lyric this client placed, without a fade. */
     public static void clear() {
         if (level != null) {
@@ -258,9 +377,42 @@ public final class WorldLyrics {
     }
 
     private static void discard(Placed piece) {
-        level.removeEntity(piece.front.getId(), Entity.RemovalReason.DISCARDED);
-        level.removeEntity(piece.back.getId(), Entity.RemovalReason.DISCARDED);
+        for (Part part : piece.parts) {
+            if (part.front != null) {
+                level.removeEntity(part.front.getId(), Entity.RemovalReason.DISCARDED);
+                level.removeEntity(part.back.getId(), Entity.RemovalReason.DISCARDED);
+            }
+        }
         occupied.remove(piece.pos);
+    }
+
+    private static int entityCount() {
+        int total = 0;
+        for (Placed piece : placed) {
+            total += piece.entities();
+        }
+        return total;
+    }
+
+    /** A burst of sparks over the word: end rod particles at random places in its box, drifting a little. */
+    private static void sparks(Placed piece, int count) {
+        if (piece.overlay) {
+            // Drawn over the picture there is no world to put particles in: little lights fly off the word.
+            for (int i = 0; i < count; i++) {
+                piece.flecks.add(new Fleck((float) ((random.nextDouble() * 2.0 - 1.0) * piece.widthPixels / 2.0),
+                        (float) ((random.nextDouble() * 2.0 - 1.0) * LINE_PIXELS / 2.0),
+                        (float) ((random.nextDouble() - 0.5) * 24.0), (float) ((random.nextDouble() - 0.6) * 24.0),
+                        0.6f + random.nextFloat() * 0.5f));
+            }
+            return;
+        }
+        for (int i = 0; i < count; i++) {
+            double along = (random.nextDouble() * 2.0 - 1.0) * piece.halfWidth;
+            double up = (random.nextDouble() * 2.0 - 1.0) * piece.halfHeight;
+            level.addParticle(ParticleTypes.END_ROD, piece.center.x + piece.axisX * along, piece.center.y + up,
+                    piece.center.z + piece.axisZ * along, (random.nextDouble() - 0.5) * 0.05,
+                    (random.nextDouble() - 0.4) * 0.05, (random.nextDouble() - 0.5) * 0.05);
+        }
     }
 
     /**
@@ -344,11 +496,13 @@ public final class WorldLyrics {
     }
 
     private static int inTicks(ClientConfig config) {
-        return Math.max(0, config.lyricsFadeInMillis / 50);
+        int ticks = Math.max(0, config.lyricsFadeInMillis / 50);
+        return ticks == 0 ? 0 : Math.max(ticks, LyricsAnimation.of(config.lyricsInStyle).minMillis() / 50);
     }
 
     private static int outTicks(ClientConfig config) {
-        return Math.max(0, config.lyricsFadeOutMillis / 50);
+        int ticks = Math.max(0, config.lyricsFadeOutMillis / 50);
+        return ticks == 0 ? 0 : Math.max(ticks, LyricsAnimation.of(config.lyricsOutStyle).minMillis() / 50);
     }
 
     /**
@@ -360,6 +514,9 @@ public final class WorldLyrics {
         separate(view);
         expire(config, progress);
         int out = outTicks(config);
+        int in = inTicks(config);
+        boolean sparksIn = LyricsAnimation.of(config.lyricsInStyle).sparks();
+        boolean sparksOut = LyricsAnimation.of(config.lyricsOutStyle).sparks();
         Iterator<Placed> it = placed.iterator();
         while (it.hasNext()) {
             Placed piece = it.next();
@@ -369,58 +526,86 @@ public final class WorldLyrics {
                 if (piece.fading >= out) {
                     discard(piece);
                     it.remove();
+                    continue;
                 }
+                if (sparksOut) {
+                    sparks(piece, piece.fading == 1 ? 18 : 3);
+                }
+            } else if (sparksIn && piece.age <= Math.max(1, in)) {
+                sparks(piece, piece.age == 1 ? 14 : 3);
             }
         }
-        lastTickNanos = System.nanoTime();
-        updateVisuals(0.0f);
+        // The pose of one tick ahead, which the client reaches by moving there smoothly during the
+        // tick: see applyTransform. Setting it only at the tick is why this is smooth at any frame
+        // rate, a display entity reads what it was set to once per tick and no more often.
+        updateVisuals(1.0f);
     }
 
-    /**
-     * Runs once per frame, between the game's 20 ticks, so the animations move at the frame rate
-     * instead of in steps of a twentieth of a second. It only draws: counting and removing stay
-     * with the tick, so a hidden HUD, which stops the frame calls, leaves the animation running
-     * at tick pace rather than frozen.
-     */
-    public static void frame() {
-        if (placed.isEmpty() || level == null) {
-            return;
-        }
-        float partial = Math.min(1.0f, (System.nanoTime() - lastTickNanos) / 50_000_000.0f);
-        updateVisuals(partial);
+    /** How far along a piece is in its appear or disappear animation. */
+    private record Phase(LyricsAnimation style, float raw, boolean leaving, float hidden,
+                         LyricsAnimation.Pose wordPose) {
     }
 
-    /** Sets opacity and pose of every word from how far along it is, {@code partial} ticks included. */
-    private static void updateVisuals(float partial) {
-        ClientConfig config = ConfigManager.client();
+    /** Where a piece is in its animation, {@code partial} ticks past its last tick included. */
+    private static Phase phase(Placed piece, float partial, ClientConfig config) {
         float in = Math.max(1, inTicks(config));
         float out = Math.max(1, outTicks(config));
         boolean fadesIn = inTicks(config) > 0;
-        LyricsAnimation inStyle = LyricsAnimation.of(config.lyricsInStyle);
-        LyricsAnimation outStyle = LyricsAnimation.of(config.lyricsOutStyle);
+        float raw;
+        boolean leaving;
+        LyricsAnimation style;
+        if (piece.fading >= 0) {
+            raw = Math.min(1.0f, (piece.fading + partial) / out);
+            leaving = true;
+            style = LyricsAnimation.of(config.lyricsOutStyle);
+        } else if (fadesIn && piece.age + partial < in) {
+            raw = 1.0f - (piece.age + partial) / in;
+            leaving = false;
+            style = LyricsAnimation.of(config.lyricsInStyle);
+        } else {
+            raw = 0.0f;
+            leaving = false;
+            style = null;
+        }
+        float hidden = LyricsAnimation.ease(raw);
+        LyricsAnimation.Pose wordPose = style == null ? LyricsAnimation.Pose.REST : style.pose(leaving, hidden);
+        return new Phase(style, raw, leaving, hidden, wordPose);
+    }
+
+    /** The state of one part: its own letter when the letters move on their own, the whole word otherwise. */
+    private static LyricsAnimation.LetterState partState(Phase phase, int index, int count) {
+        if (phase.style() != null && phase.style().perLetter() && count > 1) {
+            return LyricsAnimation.letter(phase.leaving(), phase.raw(), index, count);
+        }
+        return new LyricsAnimation.LetterState(phase.wordPose(), phase.hidden());
+    }
+
+    /** Sets opacity and pose of every part of every word in the world from how far along it is. */
+    private static void updateVisuals(float partial) {
+        ClientConfig config = ConfigManager.client();
         for (Placed piece : placed) {
-            float hidden;
-            LyricsAnimation.Pose pose;
-            if (piece.fading >= 0) {
-                hidden = LyricsAnimation.ease(Math.min(1.0f, (piece.fading + partial) / out));
-                pose = outStyle.pose(true, hidden);
-            } else if (fadesIn && piece.age + partial < in) {
-                hidden = 1.0f - LyricsAnimation.ease((piece.age + partial) / in);
-                pose = inStyle.pose(false, hidden);
-            } else {
-                hidden = 0.0f;
-                pose = LyricsAnimation.Pose.REST;
+            if (piece.overlay) {
+                continue;
             }
-            int alpha = alphaOf(1.0f - hidden);
-            if (alpha != piece.lastAlpha) {
-                piece.lastAlpha = alpha;
-                ((TextDisplayAccess) piece.front).spotifycontrol$setTextOpacity((byte) alpha);
-                ((TextDisplayAccess) piece.back).spotifycontrol$setTextOpacity((byte) alpha);
-            }
-            if (!pose.equals(piece.lastPose)) {
-                piece.lastPose = pose;
-                applyTransform(piece.front, piece.scale, piece.textHalf, piece.pitch, piece.roll, pose, false);
-                applyTransform(piece.back, piece.scale, piece.textHalf, -piece.pitch, -piece.roll, pose, true);
+            Phase phase = phase(piece, partial, config);
+            int count = piece.parts.size();
+            for (int i = 0; i < count; i++) {
+                Part part = piece.parts.get(i);
+                LyricsAnimation.LetterState state = partState(phase, i, count);
+                LyricsAnimation.Pose pose = state.pose();
+                int alpha = alphaOf(1.0f - state.hidden());
+                if (alpha != part.lastAlpha) {
+                    part.lastAlpha = alpha;
+                    ((TextDisplayAccess) part.front).spotifycontrol$setTextOpacity((byte) alpha);
+                    ((TextDisplayAccess) part.back).spotifycontrol$setTextOpacity((byte) alpha);
+                }
+                if (!pose.equals(part.lastPose)) {
+                    part.lastPose = pose;
+                    applyTransform(part.front, piece.scale, piece.textHalf, piece.pitch, piece.roll, pose, false,
+                            part.offset);
+                    applyTransform(part.back, piece.scale, piece.textHalf, -piece.pitch, -piece.roll, pose, true,
+                            -part.offset);
+                }
             }
         }
     }
@@ -461,12 +646,24 @@ public final class WorldLyrics {
             String[] words = line.text().trim().split("\\s+");
             long next = i + 1 < lines.size() ? lines.get(i + 1).startMs() : line.startMs() + 4000L;
             long end = Math.min(next, line.startMs() + MAX_LINE_MS);
-            long span = Math.max(0L, Math.min(end - line.startMs(), words.length * 450L));
+            long gap = Math.max(0L, end - line.startMs());
+            // A line is sung over nearly all of the time until the next one starts. Only a line before
+            // a long break is sung at an ordinary pace and not stretched over the whole of it.
+            long span = gap <= 7000L ? Math.round(gap * 0.9) : Math.min(gap, words.length * 600L);
+            // Long words take longer to sing than short ones, so the words are spread by their length.
+            double total = 0.0;
+            for (String word : words) {
+                total += word.length() + 2;
+            }
+            double before = 0.0;
             for (int w = 0; w < words.length; w += wordsPerPiece) {
                 int last = Math.min(words.length, w + wordsPerPiece);
                 String text = String.join(" ", Arrays.copyOfRange(words, w, last));
-                long time = line.startMs() + span * w / words.length;
+                long time = line.startMs() + Math.round(span * before / total);
                 result.add(new Piece(time, end, text));
+                for (int k = w; k < last; k++) {
+                    before += words[k].length() + 2;
+                }
             }
         }
         return List.copyOf(result);
@@ -481,6 +678,9 @@ public final class WorldLyrics {
     }
 
     private static void spawn(LocalPlayer player, Piece piece, ClientConfig config) {
+        // Drawn over the picture, the words come after everything else, so that no cloud, creature,
+        // water or particle is in front of them. They keep the place in the world they were given.
+        boolean overlay = config.lyricsSeeThrough;
         Vec3 eye = player.getEyePosition();
         // Sprinting, on foot or in flight, pushes the lyrics farther ahead so they can be read
         // before the player has run past them.
@@ -494,11 +694,12 @@ public final class WorldLyrics {
         near = (int) Math.max(MIN_CLEARANCE, Math.round(near * shrink));
         far = (int) Math.max(near + 2, Math.round(far * shrink));
 
-        int accent = Theme.accent();
-        int color = spawnCount++ % 2 == 0 ? accent : Theme.mix(accent, 0xFFFFFFFF, 0.45f);
-        Component text = Component.literal(piece.text())
-                .withStyle(LyricsFont.of(config.lyricsFont)
-                        .apply(Style.EMPTY.withColor(color & 0xFFFFFF).withBold(config.lyricsBold)));
+        // The theme colour alternates between the accent and a lighter shade from word to word,
+        // the other colours are what they are, a gradient running along the letters of a word.
+        float lighter = spawnCount++ % 2 == 0 ? 0.0f : 0.45f;
+        int[] stops = LyricsColor.of(config.lyricsColor).stops(config, lighter);
+        Component text = LyricsColor.build(piece.text(), stops,
+                LyricsFont.of(config.lyricsFont).apply(Style.EMPTY.withBold(config.lyricsBold)));
         int textPixels = Minecraft.getInstance().font.width(text) + 1;
 
         float size = (float) (Math.max(0.1f, config.lyricsTextSize / 100.0f) * (1.0 - 0.45 * crowd));
@@ -518,24 +719,65 @@ public final class WorldLyrics {
         double facing = Math.toDegrees(Math.atan2(middle.y - eye.y, across));
         float pitch = (float) Math.max(-89.0, Math.min(89.0,
                 facing + (config.lyricsTilt ? (random.nextDouble() * 2.0 - 1.0) * MAX_LEAN_DEGREES : 0.0)));
-        Display.TextDisplay front = display(spot, yaw, pitch, spot.roll(), text);
-        applyTransform(front, spot.scale(), spot.textHalfHeight(), pitch, spot.roll(), LyricsAnimation.Pose.REST,
-                false);
-        // Text is only drawn on its front side. A twin turned the other way makes the words
-        // visible from behind as well. Its tilt is mirrored so both lie in the same plane.
-        Display.TextDisplay back = display(spot, yaw + 180.0f, -pitch, -spot.roll(), text);
-        applyTransform(back, spot.scale(), spot.textHalfHeight(), -pitch, -spot.roll(), LyricsAnimation.Pose.REST,
-                true);
-        level.addEntity(front);
-        level.addEntity(back);
+        // A word whose letters move on their own is made of one display per letter. Each sits at its
+        // own place along the word, worked out from how wide the letters before it are.
+        Style base = LyricsFont.of(config.lyricsFont).apply(Style.EMPTY.withBold(config.lyricsBold));
+        boolean letters = (LyricsAnimation.of(config.lyricsInStyle).perLetter()
+                || LyricsAnimation.of(config.lyricsOutStyle).perLetter())
+                && piece.text().codePointCount(0, piece.text().length()) > 1;
+        List<Part> parts = new ArrayList<>();
+        int totalPixels = textPixels - 1;
+        if (letters) {
+            int[] points = piece.text().codePoints().toArray();
+            Component[] pieces = new Component[points.length];
+            int[] widths = new int[points.length];
+            int total = 0;
+            for (int i = 0; i < points.length; i++) {
+                float at = (float) i / (points.length - 1);
+                pieces[i] = LyricsColor.build(new String(Character.toChars(points[i])),
+                        new int[] {LyricsColor.sample(stops, at)}, base);
+                widths[i] = Minecraft.getInstance().font.width(pieces[i]);
+                total += widths[i];
+            }
+            int before = 0;
+            totalPixels = total;
+            for (int i = 0; i < points.length; i++) {
+                double offsetPixels = before + widths[i] / 2.0 - total / 2.0;
+                parts.add(makePart(spot, yaw, pitch, pieces[i], offsetPixels * PIXEL * spot.scale(), overlay,
+                        widths[i], offsetPixels));
+                before += widths[i];
+            }
+        } else {
+            parts.add(makePart(spot, yaw, pitch, text, 0.0, overlay, textPixels - 1, 0.0));
+        }
 
-        placed.add(new Placed(front, back, pos, spot, pitch, piece.endMs()));
+        placed.add(new Placed(parts, pos, spot, pitch, View.of(player).right(), piece.endMs(), overlay,
+                totalPixels));
         occupied.add(pos);
         // The kept count fades pieces out gently in expire(). This is only the hard ceiling for
-        // the seconds mode with a long time and a fast song.
-        while (placed.size() > HARD_LIMIT) {
+        // the seconds mode with a long time and a fast song, and for words made of many letters.
+        while (placed.size() > HARD_LIMIT || (entityCount() > MAX_ENTITIES && placed.size() > 1)) {
             discard(placed.remove(0));
         }
+    }
+
+    /** Both displays of one part, with their first pose, added to the world. */
+    private static Part makePart(Spot spot, float yaw, float pitch, Component text, double offset, boolean overlay,
+                                 int width, double offsetPixels) {
+        if (overlay) {
+            return new Part(null, null, offset, text, width, offsetPixels);
+        }
+        // Text is only drawn on its front side. A twin turned the other way makes the words
+        // visible from behind as well. Its tilt is mirrored so both lie in the same plane.
+        Display.TextDisplay front = display(spot, yaw, pitch, spot.roll(), text);
+        applyTransform(front, spot.scale(), spot.textHalfHeight(), pitch, spot.roll(), LyricsAnimation.Pose.REST,
+                false, offset);
+        Display.TextDisplay back = display(spot, yaw + 180.0f, -pitch, -spot.roll(), text);
+        applyTransform(back, spot.scale(), spot.textHalfHeight(), -pitch, -spot.roll(), LyricsAnimation.Pose.REST,
+                true, -offset);
+        level.addEntity(front);
+        level.addEntity(back);
+        return new Part(front, back, offset, text, width, offsetPixels);
     }
 
     private static Display.TextDisplay display(Spot spot, float yaw, float pitch, float roll, Component text) {
@@ -551,7 +793,8 @@ public final class WorldLyrics {
         textAccess.spotifycontrol$setText(text);
         textAccess.spotifycontrol$setTextOpacity((byte) MIN_ALPHA);
         display.getEntityData().set(TextDisplayAccess.spotifycontrol$backgroundColorId(), 0);
-        display.getEntityData().set(TextDisplayAccess.spotifycontrol$styleFlagsId(), FLAG_SHADOW);
+        display.getEntityData().set(TextDisplayAccess.spotifycontrol$styleFlagsId(),
+                FLAG_SHADOW);
 
         DisplayAccess access = (DisplayAccess) display;
         access.spotifycontrol$setBillboard(Display.BillboardConstraints.FIXED);
@@ -573,18 +816,26 @@ public final class WorldLyrics {
      * vertical axis is the same for both.</p>
      */
     private static void applyTransform(Display.TextDisplay display, float scale, double textHalf, float pitchDegrees,
-                                       float roll, LyricsAnimation.Pose pose, boolean back) {
+                                       float roll, LyricsAnimation.Pose pose, boolean back, double offset) {
         float half = (float) textHalf;
         float line = half * 2.0f;
         float spin = back ? -pose.spin() : pose.spin();
         float slide = (back ? -pose.slide() : pose.slide()) * line;
-        Quaternionf turn = new Quaternionf().rotationX((float) Math.toRadians(pitchDegrees))
-                .rotateZ(roll + spin).rotateY(pose.flip());
+        // How the whole word stands: tipped and tilted. A letter's place along the word follows it.
+        Quaternionf stand = new Quaternionf().rotationX((float) Math.toRadians(pitchDegrees)).rotateZ(roll);
+        Quaternionf turn = new Quaternionf(stand).rotateZ(spin).rotateY(pose.flip());
         Vector3f scaledMiddle = new Vector3f(0.0f, half * pose.scale(), 0.0f);
-        Vector3f shift = new Vector3f(slide, half + pose.lift() * line, 0.0f).sub(turn.transform(scaledMiddle));
+        Vector3f along = stand.transform(new Vector3f((float) offset, 0.0f, 0.0f));
+        Vector3f shift = new Vector3f(slide, half + pose.lift() * line, 0.0f).add(along)
+                .sub(turn.transform(scaledMiddle));
         float size = scale * pose.scale();
-        ((DisplayAccess) display).spotifycontrol$setTransformation(Platform.transformation(shift, turn,
-                new Vector3f(size, size, size)));
+        DisplayAccess access = (DisplayAccess) display;
+        access.spotifycontrol$setTransformation(Platform.transformation(shift, turn, new Vector3f(size, size, size)));
+        // Moves to the new pose over the one tick until the next update, starting now. The client
+        // shows the stretch in between at the frame rate. The delay has to be set every time: that
+        // setter always counts as a change, which is what restarts the movement.
+        access.spotifycontrol$setInterpolationDuration(1);
+        access.spotifycontrol$setInterpolationDelay(0);
     }
 
     /**
@@ -756,5 +1007,151 @@ public final class WorldLyrics {
             }
         }
         return found;
+    }
+
+    // ------------------------------------------------------------- drawn over the picture
+
+    /** Called by the game version's world render with what it rendered the world with this frame. */
+    public static void captureWorldView(Matrix4f clip, Vec3 cameraPosition, float projection) {
+        capturedClip = clip;
+        capturedPosition = cameraPosition;
+        capturedProjection = projection;
+        capturedNanos = System.nanoTime();
+    }
+
+    /**
+     * What the field of view does on top of the setting while the player sprints, flies or is
+     * hasted: the same sum the game does. Only used where the game's own matrices are not handed over.
+     */
+    private static float fovTargetOf(Minecraft client, LocalPlayer player) {
+        float modifier = 1.0f;
+        if (player.getAbilities().flying) {
+            modifier *= 1.1f;
+        }
+        double walking = player.getAbilities().getWalkingSpeed();
+        modifier *= (float) ((player.getAttributeValue(Attributes.MOVEMENT_SPEED) / walking + 1.0) / 2.0);
+        if (walking == 0.0 || Float.isNaN(modifier) || Float.isInfinite(modifier)) {
+            modifier = 1.0f;
+        }
+        double effect = client.options.fovEffectScale().get();
+        return (float) (1.0 + (modifier - 1.0) * effect);
+    }
+
+    /**
+     * Draws the pieces that are shown over the picture, after the world and everything in it. Runs
+     * every frame, not every tick, so they move as smoothly as the game does, and projects them with
+     * the very matrices the world was drawn with, so they stay where they are in the world.
+     */
+    public static void renderOverlay(GuiGraphics graphics) {
+        Minecraft client = Minecraft.getInstance();
+        if (placed.isEmpty() || client.level == null || client.level != level || client.player == null
+                || client.options.hideGui) {
+            return;
+        }
+        boolean any = false;
+        for (Placed piece : placed) {
+            if (piece.overlay) {
+                any = true;
+                break;
+            }
+        }
+        if (!any) {
+            return;
+        }
+        ClientConfig config = ConfigManager.client();
+        Font font = client.font;
+        int guiWidth = Math.max(1, client.getWindow().getGuiScaledWidth());
+        int guiHeight = Math.max(1, client.getWindow().getGuiScaledHeight());
+        long now = System.nanoTime();
+        float partial = Math.max(0.0f, Math.min(1.0f, (now - lastTickNanos) / 50_000_000.0f));
+        float frame = lastFrameNanos == 0L ? 0.0f : Math.min(0.1f, (now - lastFrameNanos) / 1_000_000_000.0f);
+        lastFrameNanos = now;
+
+        Matrix4f clip;
+        Vec3 camera;
+        float projection;
+        if (capturedClip != null && now - capturedNanos < 200_000_000L) {
+            clip = capturedClip;
+            camera = capturedPosition;
+            projection = capturedProjection;
+        } else {
+            // No matrices from the game: rebuilt from where the player looks and the field of view, which
+            // gets close but cannot know about the sway of walking.
+            fovModifier += (fovTarget - fovModifier) * (1.0f - (float) Math.pow(0.5, frame * 20.0));
+            LocalPlayer player = client.player;
+            double fov = Math.toRadians(client.options.fov().get() * fovModifier);
+            double aspect = (double) client.getWindow().getWidth() / Math.max(1, client.getWindow().getHeight());
+            projection = (float) (1.0 / Math.tan(fov / 2.0));
+            clip = new Matrix4f().perspective((float) fov, (float) aspect, 0.05f, 1000.0f)
+                    .rotateX((float) Math.toRadians(player.getViewXRot(partial)))
+                    .rotateY((float) Math.toRadians(player.getViewYRot(partial) + 180.0f));
+            camera = player.getEyePosition(partial);
+        }
+
+        Vector4f point = new Vector4f();
+        for (Placed piece : placed) {
+            if (!piece.overlay) {
+                continue;
+            }
+            Vec3 rel = piece.center.subtract(camera);
+            point.set((float) rel.x, (float) rel.y, (float) rel.z, 1.0f);
+            clip.transform(point);
+            if (point.w < 0.4f) {
+                continue;
+            }
+            double centerX = (point.x / point.w + 1.0) / 2.0 * guiWidth;
+            double centerY = (1.0 - point.y / point.w) / 2.0 * guiHeight;
+            double pixel = PIXEL * piece.scale * (guiHeight / 2.0) * projection / point.w;
+            if (centerX < -piece.widthPixels * pixel || centerX > guiWidth + piece.widthPixels * pixel
+                    || centerY < -guiHeight * 0.3 || centerY > guiHeight * 1.3) {
+                continue;
+            }
+            drawPiece(graphics, font, piece, centerX, centerY, (float) pixel, phase(piece, partial, config));
+            drawFlecks(graphics, piece, centerX, centerY, (float) pixel, frame);
+        }
+    }
+
+    /** One piece drawn the way its displays would be: each part in its own place of its animation. */
+    private static void drawPiece(GuiGraphics graphics, Font font, Placed piece, double centerX, double centerY,
+                                  float pixel, Phase phase) {
+        float lineHeight = (float) LINE_PIXELS * pixel;
+        double cos = Math.cos(piece.roll);
+        double sin = Math.sin(piece.roll);
+        int count = piece.parts.size();
+        for (int i = 0; i < count; i++) {
+            Part part = piece.parts.get(i);
+            LyricsAnimation.LetterState state = partState(phase, i, count);
+            float alpha = 1.0f - state.hidden();
+            if (alpha < 0.06f) {
+                continue;
+            }
+            LyricsAnimation.Pose pose = state.pose();
+            double along = part.offsetPixels * pixel + pose.slide() * lineHeight;
+            double lift = -pose.lift() * lineHeight;
+            float flip = Math.max(0.03f, (float) Math.abs(Math.cos(pose.flip())));
+            Platform.pushTransform(graphics, (float) (centerX + along * cos - lift * sin),
+                    (float) (centerY + along * sin + lift * cos), piece.roll + pose.spin(),
+                    pixel * pose.scale() * flip, pixel * pose.scale());
+            Platform.drawText(graphics, font, part.text, -part.width / 2, -4, Theme.alpha(0xFFFFFFFF, alpha), true);
+            Platform.popMatrix(graphics);
+        }
+    }
+
+    /** The little lights of the sparks animation: they drift, fade and are gone. */
+    private static void drawFlecks(GuiGraphics graphics, Placed piece, double centerX, double centerY, float pixel,
+                                   float frame) {
+        Iterator<Fleck> it = piece.flecks.iterator();
+        while (it.hasNext()) {
+            Fleck fleck = it.next();
+            fleck.age += frame;
+            if (fleck.age >= fleck.life) {
+                it.remove();
+                continue;
+            }
+            int x = (int) Math.round(centerX + (fleck.x + fleck.vx * fleck.age) * pixel);
+            int y = (int) Math.round(centerY + (fleck.y + fleck.vy * fleck.age) * pixel);
+            float fade = 1.0f - fleck.age / fleck.life;
+            graphics.fill(x, y, x + 2, y + 2, Theme.alpha(0xFFFFFFFF, Math.max(0.06f, fade)));
+        }
     }
 }

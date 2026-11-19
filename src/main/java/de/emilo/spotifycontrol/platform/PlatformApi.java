@@ -64,6 +64,18 @@ public interface PlatformApi {
 
     void registerHud(Consumer<GuiGraphics> renderer);
 
+    /** Takes what the world was rendered with: the projection times the view, the camera, the projection's scale. */
+    @FunctionalInterface
+    interface WorldViewReceiver {
+        void accept(org.joml.Matrix4f clip, net.minecraft.world.phys.Vec3 camera, float projection);
+    }
+
+    /**
+     * Hands over, once per frame, the matrices the game rendered the world with, where the game version
+     * allows it. Versions that do not never call the receiver, and the lyrics make do without it.
+     */
+    void registerWorldView(WorldViewReceiver receiver);
+
     boolean click(GuiEventListener widget, double mouseX, double mouseY, int button);
 
     boolean keyPress(GuiEventListener widget, int keyCode, int scanCode, int modifiers);
